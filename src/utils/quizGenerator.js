@@ -50,9 +50,20 @@ export const generateQuiz = (allData, config) => {
       correctAnswer = item.meaning;
       distractorPool = categoryMap.paribhashik.filter(i => i.id !== item.id).map(i => i.meaning);
     } else if (cat === 'somarthok') {
+      // meaning is a comma-separated list of synonyms.
+      // Show ONE randomly chosen synonym as the correct answer, and use
+      // single synonyms (from other words' lists) as distractor options.
+      const synonyms = item.meaning.split(',').map(s => s.trim()).filter(Boolean);
+      const chosen = synonyms.length > 0
+        ? synonyms[Math.floor(Math.random() * synonyms.length)]
+        : item.meaning;
       prompt = `"${item.term}" - এর সঠিক সমার্থক শব্দ কোনটি?`;
-      correctAnswer = item.meaning;
-      distractorPool = categoryMap.somarthok.filter(i => i.id !== item.id).map(i => i.meaning);
+      correctAnswer = chosen;
+      distractorPool = categoryMap.somarthok
+        .filter(i => i.id !== item.id)
+        .flatMap(i => i.meaning.split(',').map(s => s.trim()))
+        // exclude any word that is also a valid synonym of the current term (or the term itself)
+        .filter(s => s && !synonyms.includes(s) && s !== item.term);
     } else if (cat === 'ekkothay') {
       // 50% chance term -> meaning or meaning -> term
       if (Math.random() > 0.5) {
