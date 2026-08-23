@@ -9,7 +9,7 @@ export default function ReadingTabs({
   onPracticeItem,
   initialSubTab = 'bagdhara'
 }) {
-  const [subTab, setSubTab] = useState(initialSubTab); // 'bagdhara', 'biporit', 'paribhashik', 'ekkothay'
+  const [subTab, setSubTab] = useState(initialSubTab); // 'bagdhara', 'biporit', 'paribhashik', 'ekkothay', 'somarthok'
   const [searchQuery, setSearchQuery] = useState('');
   const [letterFilter, setLetterFilter] = useState('ALL');
   const [onlyBookmarks, setOnlyBookmarks] = useState(false);
@@ -21,7 +21,8 @@ export default function ReadingTabs({
     { id: 'bagdhara', name: 'বাগধারা', count: databaseData.categories.bagdhara.count, color: 'peach' },
     { id: 'biporit', name: 'বিপরীত শব্দ', count: databaseData.categories.biporit.count, color: 'mint' },
     { id: 'paribhashik', name: 'পারিভাষিক শব্দ', count: databaseData.categories.paribhashik.count, color: 'babyblue' },
-    { id: 'ekkothay', name: 'এককথায় প্রকাশ', count: databaseData.categories.ekkothay.count, color: 'retrogold' }
+    { id: 'ekkothay', name: 'এককথায় প্রকাশ', count: databaseData.categories.ekkothay.count, color: 'retrogold' },
+    { id: 'somarthok', name: 'সমার্থক শব্দ', count: databaseData.categories.somarthok.count, color: 'retrorose' }
   ];
 
   // Letters for filter

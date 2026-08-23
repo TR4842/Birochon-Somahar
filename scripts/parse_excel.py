@@ -106,6 +106,24 @@ def process_data():
             }
             ekkothay_list.append(item)
 
+    # 5. Somarthok Shobdo (Synonyms)
+    somarthok_file = os.path.join(base_dir, "সমার্থক শব্দ.xlsx")
+    somarthok_rows = parse_xlsx(somarthok_file)
+    somarthok_list = []
+    for i, r in enumerate(somarthok_rows):
+        if len(r) >= 2 and r[0] and r[1]:
+            # check if header row
+            if "সমার্থক শব্দ" in r[0] or r[0].strip() == "শব্দ":
+                continue
+            item = {
+                "id": f"som_{len(somarthok_list)+1}",
+                "term": r[0].strip(), # Main word
+                "meaning": r[1].strip(), # Synonyms of the word
+                "category": "somarthok",
+                "categoryName": "সমার্থক শব্দ"
+            }
+            somarthok_list.append(item)
+
     combined_data = {
         "categories": {
             "bagdhara": {
@@ -143,15 +161,25 @@ def process_data():
                 "icon": "Sparkles",
                 "description": "বাক্য সংকোচন বা এককথায় প্রকাশ সমাহার",
                 "color": "#F4A261"
+            },
+            "somarthok": {
+                "id": "somarthok",
+                "name": "সমার্থক শব্দ",
+                "englishName": "Synonyms",
+                "count": len(somarthok_list),
+                "icon": "ArrowLeftRight",
+                "description": "গুরুত্বপূর্ণ বাংলা শব্দ ও তাদের সমার্থক শব্দসমূহ",
+                "color": "#E76F51"
             }
         },
         "items": {
             "bagdhara": bagdhara_list,
             "biporit": biporit_list,
             "paribhashik": paribhashik_list,
-            "ekkothay": ekkothay_list
+            "ekkothay": ekkothay_list,
+            "somarthok": somarthok_list
         },
-        "totalCount": len(bagdhara_list) + len(biporit_list) + len(paribhashik_list) + len(ekkothay_list)
+        "totalCount": len(bagdhara_list) + len(biporit_list) + len(paribhashik_list) + len(ekkothay_list) + len(somarthok_list)
     }
 
     output_path = os.path.join(base_dir, "src", "data", "birochon_data.json")

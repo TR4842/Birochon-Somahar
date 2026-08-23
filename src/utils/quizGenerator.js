@@ -49,6 +49,10 @@ export const generateQuiz = (allData, config) => {
       prompt = `"${item.term}" - এর বাংলা পারিভাষিক রূপ কোনটি?`;
       correctAnswer = item.meaning;
       distractorPool = categoryMap.paribhashik.filter(i => i.id !== item.id).map(i => i.meaning);
+    } else if (cat === 'somarthok') {
+      prompt = `"${item.term}" - এর সঠিক সমার্থক শব্দ কোনটি?`;
+      correctAnswer = item.meaning;
+      distractorPool = categoryMap.somarthok.filter(i => i.id !== item.id).map(i => i.meaning);
     } else if (cat === 'ekkothay') {
       // 50% chance term -> meaning or meaning -> term
       if (Math.random() > 0.5) {
