@@ -205,7 +205,7 @@ export default function QuizView({ databaseData, onQuizComplete, onReturnHome, i
                 }`}
               >
                 <div>সকল বিষয় অন্তর্ভুক্ত</div>
-                <div className="text-[10px] font-normal opacity-90 mt-0.5">১,৭৯১ টি প্রশ্ন থেকে র্যান্ডম</div>
+                <div className="text-[10px] font-normal opacity-90 mt-0.5">{formatBnNumber((databaseData.totalCount || 0).toLocaleString('en-US'))} টি প্রশ্ন থেকে র্যান্ডম</div>
               </button>
 
               {Object.entries(databaseData.categories).map(([catKey, catInfo]) => (

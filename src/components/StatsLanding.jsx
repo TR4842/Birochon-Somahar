@@ -37,7 +37,8 @@ export default function StatsLanding({ stats, onStartQuiz, onResetStats, databas
     { key: 'bagdhara', name: 'বাংলা বাগধারা', count: databaseInfo?.categories?.bagdhara?.count || 648, color: 'peach' },
     { key: 'biporit', name: 'বিপরীত শব্দ', count: databaseInfo?.categories?.biporit?.count || 160, color: 'mint' },
     { key: 'paribhashik', name: 'পারিভাষিক শব্দ', count: databaseInfo?.categories?.paribhashik?.count || 924, color: 'babyblue' },
-    { key: 'ekkothay', name: 'এককথায় প্রকাশ', count: databaseInfo?.categories?.ekkothay?.count || 59, color: 'retrogold' }
+    { key: 'ekkothay', name: 'এককথায় প্রকাশ', count: databaseInfo?.categories?.ekkothay?.count || 59, color: 'retrogold' },
+    { key: 'somarthok', name: 'সমার্থক শব্দ', count: databaseInfo?.categories?.somarthok?.count || 0, color: 'retrorose' }
   ];
 
   return (
@@ -189,7 +190,7 @@ export default function StatsLanding({ stats, onStartQuiz, onResetStats, databas
             বিষয়ভিত্তিক সঠিকতার হার
           </h3>
           <span className="text-xs text-warmcharcoal-100">
-            মোট ৪ টি বিষয়
+            মোট {formatBnNumber(categories.length)} টি বিষয়
           </span>
         </div>
 
@@ -370,7 +371,7 @@ export default function StatsLanding({ stats, onStartQuiz, onResetStats, databas
           <BookOpen className="w-5 h-5 text-peach-500" />
           বিরচন ভাণ্ডার তথ্য
         </h3>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 text-center">
           <div className="p-3 bg-peach-50 rounded-xl border border-peach-200">
             <div className="text-lg font-bold text-warmcharcoal-300">
               {formatBnNumber(databaseInfo?.categories?.bagdhara?.count || 648)}
@@ -395,10 +396,16 @@ export default function StatsLanding({ stats, onStartQuiz, onResetStats, databas
             </div>
             <div className="text-xs text-warmcharcoal-200 mt-0.5">এককথায় প্রকাশ</div>
           </div>
+          <div className="p-3 bg-retrorose/10 rounded-xl border border-retrorose/30">
+            <div className="text-lg font-bold text-warmcharcoal-300">
+              {formatBnNumber(databaseInfo?.categories?.somarthok?.count || 0)}
+            </div>
+            <div className="text-xs text-warmcharcoal-200 mt-0.5">সমার্থক শব্দ</div>
+          </div>
         </div>
         
         <div className="mt-4 pt-3 border-t border-peach-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-warmcharcoal-200">
-          <span>সর্বমোট ১,৭৯১ টি সমাহার সম্পূর্ণ অফলাইনে অ্যাক্সেসযোগ্য</span>
+          <span>সর্বমোট {formatBnNumber((databaseInfo?.totalCount || 0).toLocaleString('en-US'))} টি সমাহার সম্পূর্ণ অফলাইনে অ্যাক্সেসযোগ্য</span>
           <button
             onClick={() => setActiveTab('reading')}
             className="text-peach-500 font-bold hover:underline flex items-center gap-1"

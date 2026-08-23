@@ -17,7 +17,8 @@ export const getInitialStats = () => {
       bagdhara: { right: 0, wrong: 0, total: 0 },
       biporit: { right: 0, wrong: 0, total: 0 },
       paribhashik: { right: 0, wrong: 0, total: 0 },
-      ekkothay: { right: 0, wrong: 0, total: 0 }
+      ekkothay: { right: 0, wrong: 0, total: 0 },
+      somarthok: { right: 0, wrong: 0, total: 0 }
     },
     history: []
   };
@@ -28,7 +29,12 @@ export const loadStats = () => {
     const raw = localStorage.getItem(STATS_KEY);
     if (!raw) return getInitialStats();
     const parsed = JSON.parse(raw);
-    return { ...getInitialStats(), ...parsed };
+    // Merge saved categoryStats over defaults so newly added categories appear for existing users
+    return {
+      ...getInitialStats(),
+      ...parsed,
+      categoryStats: { ...getInitialStats().categoryStats, ...(parsed.categoryStats || {}) }
+    };
   } catch (e) {
     console.error('Error loading stats', e);
     return getInitialStats();
