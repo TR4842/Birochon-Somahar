@@ -1,0 +1,6 @@
+{
+  "appId": "com.tr4842.birochonsomahar",
+  "appName": "বিরচন সমাহার",
+  "webDir": "dist",
+  "bundledWebRuntime": false
+}
