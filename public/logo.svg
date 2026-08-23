@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <rect width="512" height="512" rx="110" fill="#F7D6C8"/>
+  <rect x="24" y="24" width="464" height="464" rx="90" fill="#FFFDF9" stroke="#E8A589" stroke-width="12"/>
+  <path d="M120 140 H 392 V 372 C 392 388 379 400 363 400 H 149 C 133 400 120 388 120 372 Z" fill="#D8E2DC" stroke="#362C28" stroke-width="10"/>
+  <path d="M140 120 H 372 C 388 120 400 133 400 149 V 350 H 140 Z" fill="#FFFDF9" stroke="#362C28" stroke-width="10"/>
+  <!-- Open Book Page Shadow -->
+  <path d="M270 120 V 350 M 270 120 H 260" stroke="#362C28" stroke-width="8" stroke-linecap="round"/>
+  <!-- Decorative Text/Symbol -->
+  <text x="200" y="230" font-family="'Hind Siliguri', 'Noto Serif Bengali', sans-serif" font-size="90" font-weight="bold" fill="#362C28">বি</text>
+  <text x="280" y="300" font-family="'Hind Siliguri', 'Noto Serif Bengali', sans-serif" font-size="90" font-weight="bold" fill="#D97757">স</text>
+  <!-- Quill / Pen Element -->
+  <path d="M340 180 C 370 150 400 120 420 100 C 420 100 410 140 380 170 L 340 180 Z" fill="#E8A589" stroke="#362C28" stroke-width="6"/>
+</svg>

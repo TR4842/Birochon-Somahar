@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Production build output
+dist/
+dist-ssr/
+
+# Python cache & temporary test files
+__pycache__/
+*.pyc
+parse_test.py
+
+# Capacitor / Android build outputs
+android/app/build/
+android/build/
+android/.gradle/
+android/app/src/main/assets/public/
+
+# Environment / IDE files
+.env
+.env.local
+.vscode/
+.idea/
+.DS_Store

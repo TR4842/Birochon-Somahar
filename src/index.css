@@ -1,0 +1,20 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom Scrollbars */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+body {
+  background-color: #FAF7F2;
+  color: #362C28;
+  font-family: 'Hind Siliguri', 'Noto Serif Bengali', sans-serif;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
