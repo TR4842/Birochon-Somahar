@@ -57,8 +57,8 @@ export default function AboutView() {
         <p className="text-sm text-warmcharcoal-300 leading-relaxed font-bengali">
           <span className="text-base font-bold">হ্যালো, আমি তানভীর রহমান।</span>
           <br />
-          বরিশাল বিশ্ববিদ্যালয় থেকে <span className="font-bold">বিবিএ ও এমবিএ</span> সম্পন্ন করেছি; বিভাগ হলো{' '}
-          <span className="font-bold">ফাইন্যান্স এন্ড ব্যাংকিং</span>।
+          আমি বারিশাল বিদ্যালয়, ফাইনান্স অ্যান্ড ব্যাংকিং বিভাগ, থেকে{' '}
+          <span className="font-bold">BBA &amp; MBA</span> সম্পন্ন করেছি।
         </p>
         <p className="text-sm text-warmcharcoal-300 leading-relaxed font-bengali">
           আশা করছি আপনি আমার অ্যাপটি উপভোগ করবেন।
@@ -79,7 +79,7 @@ export default function AboutView() {
             <div>
               <div className="text-sm font-bold text-warmcharcoal-300">বিবিএ (BBA)</div>
               <div className="text-xs text-warmcharcoal-200">বরিশাল বিশ্ববিদ্যালয়</div>
-              <div className="text-[11px] text-warmcharcoal-100 mt-0.5">ফাইন্যান্স এন্ড ব্যাংকিং বিভাগ</div>
+              <div className="text-[11px] text-warmcharcoal-100 mt-0.5">ফাইন্যান্স অ্যান্ড ব্যাংকিং বিভাগ</div>
             </div>
           </div>
 
@@ -90,7 +90,7 @@ export default function AboutView() {
             <div>
               <div className="text-sm font-bold text-warmcharcoal-300">এমবিএ (MBA)</div>
               <div className="text-xs text-warmcharcoal-200">বরিশাল বিশ্ববিদ্যালয়</div>
-              <div className="text-[11px] text-warmcharcoal-100 mt-0.5">ফাইন্যান্স এন্ড ব্যাংকিং বিভাগ</div>
+              <div className="text-[11px] text-warmcharcoal-100 mt-0.5">ফাইন্যান্স অ্যান্ড ব্যাংকিং বিভাগ</div>
             </div>
           </div>
         </div>
