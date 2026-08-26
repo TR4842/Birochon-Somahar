@@ -107,18 +107,35 @@ def process_data():
             ekkothay_list.append(item)
 
     # 5. Somarthok Shobdo (Synonyms)
+    # Excel columns: 1) মূল শব্দ  2) বিগত বছরের বিভিন্ন পরীক্ষায় আসা সমার্থক শব্দ
+    #                 3) অন্যান্য প্রয়োজনীয় সমার্থক শব্দ
+    # We keep the two synonym lists as separate fields and also build a merged
+    # `meaning` field for backward-compatibility with the rest of the app
+    # (bookmarks / quiz distractors / ItemCard fallback).
     somarthok_file = os.path.join(base_dir, "সমার্থক শব্দ.xlsx")
     somarthok_rows = parse_xlsx(somarthok_file)
     somarthok_list = []
     for i, r in enumerate(somarthok_rows):
-        if len(r) >= 2 and r[0] and r[1]:
-            # check if header row
-            if "সমার্থক শব্দ" in r[0] or r[0].strip() == "শব্দ":
+        if len(r) >= 1 and r[0] and r[0].strip() not in ("", "মূল শব্দ", "শব্দ", "সমার্থক শব্দ"):
+            term = r[0].strip()
+            # Skip purely header-ish rows just in case
+            if "সমার্থক শব্দ" in term and "পরীক্ষা" in (r[1] if len(r) > 1 else ""):
                 continue
+
+            exam_synonyms = r[1].strip() if len(r) >= 2 and r[1] else ""
+            extra_synonyms = r[2].strip() if len(r) >= 3 and r[2] else ""
+
+            # Build merged "meaning" so existing UI code (which reads item.meaning)
+            # keeps working without further changes — quiz distractors etc.
+            merged_parts = [s for s in [exam_synonyms, extra_synonyms] if s]
+            merged_meaning = ", ".join(merged_parts)
+
             item = {
                 "id": f"som_{len(somarthok_list)+1}",
-                "term": r[0].strip(), # Main word
-                "meaning": r[1].strip(), # Synonyms of the word
+                "term": term,                       # মূল শব্দ
+                "examSynonyms": exam_synonyms,      # বিগত বছরের বিভিন্ন পরীক্ষায় আসা সমার্থক শব্দ
+                "extraSynonyms": extra_synonyms,    # অন্যান্য প্রয়োজনীয় সমার্থক শব্দ
+                "meaning": merged_meaning,          # merged, for backward-compat
                 "category": "somarthok",
                 "categoryName": "সমার্থক শব্দ"
             }

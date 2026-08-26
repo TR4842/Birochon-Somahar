@@ -5,6 +5,7 @@ import StatsLanding from './components/StatsLanding';
 import ReadingTabs from './components/ReadingTabs';
 import QuizView from './components/QuizView';
 import BookmarksView from './components/BookmarksView';
+import AboutView from './components/AboutView';
 
 import birochonData from './data/birochon_data.json';
 import { 
@@ -101,6 +102,10 @@ export default function App() {
             onToggleBookmark={handleToggleBookmark}
             onPracticeItem={handlePracticeItem}
           />
+        )}
+
+        {activeTab === 'about' && (
+          <AboutView />
         )}
       </main>
 

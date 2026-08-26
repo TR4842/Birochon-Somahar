@@ -3,6 +3,9 @@
 const STATS_KEY = 'birochon_quiz_stats_v1';
 const BOOKMARKS_KEY = 'birochon_bookmarks_v1';
 const SETTINGS_KEY = 'birochon_settings_v1';
+// Persistent list of questions the user got wrong across quizzes. Used to
+// offer a "re-practice from wrong answers" quiz mode.
+const WRONG_KEY = 'birochon_wrong_v1';
 
 export const getInitialStats = () => {
   return {
@@ -46,7 +49,7 @@ export const saveQuizResult = (quizResult) => {
     const current = loadStats();
     const now = new Date();
     const dateStr = now.toISOString().split('T')[0];
-    
+
     let newStreak = current.currentStreak || 0;
     if (!current.lastQuizDate) {
       newStreak = 1;
@@ -76,7 +79,7 @@ export const saveQuizResult = (quizResult) => {
       {
         id: 'qhist_' + Date.now(),
         date: now.toLocaleDateString('bn-BD', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
-        categoryName: quizResult.categoryName || 'সকল বিষয়',
+        categoryName: quizResult.categoryName || 'সকল বিষয়',
         totalQuestions: quizResult.totalQuestions,
         rightCount: quizResult.rightCount,
         wrongCount: quizResult.wrongCount,
@@ -133,4 +136,79 @@ export const toggleBookmark = (itemId) => {
   }
   localStorage.setItem(BOOKMARKS_KEY, JSON.stringify(updated));
   return updated;
+};
+
+// ============================================================================
+// "Wrong answer" persistence
+// ----------------------------------------------------------------------------
+// We keep a flat array of saved "wrong entries" (one per question-item id).
+// Each entry stores everything needed to re-render the question later without
+// having to look up the live database — including the prompt, correct answer,
+// and the originating category.
+// ============================================================================
+
+export const loadWrongAnswers = () => {
+  try {
+    const raw = localStorage.getItem(WRONG_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    console.error('Error loading wrong answers', e);
+    return [];
+  }
+};
+
+// Add (or refresh) wrong entries. `entries` is an array of:
+//   { itemId, category, categoryName, term, meaning, correctAnswer, prompt, options }
+// We de-dupe by `itemId` so a question that the user keeps getting wrong only
+// appears once in the "re-practice from wrong" list.
+export const addWrongAnswers = (entries) => {
+  if (!Array.isArray(entries) || entries.length === 0) return loadWrongAnswers();
+  try {
+    const current = loadWrongAnswers();
+    const map = new Map();
+    // Existing entries first (so we keep the original add-date).
+    current.forEach(e => { if (e && e.itemId) map.set(e.itemId, e); });
+    entries.forEach(e => {
+      if (!e || !e.itemId) return;
+      // Refresh fields but keep the original `addedAt` if already present.
+      const existing = map.get(e.itemId);
+      map.set(e.itemId, {
+        ...e,
+        addedAt: existing?.addedAt || new Date().toISOString(),
+        lastWrongAt: new Date().toISOString()
+      });
+    });
+    const merged = Array.from(map.values());
+    localStorage.setItem(WRONG_KEY, JSON.stringify(merged));
+    return merged;
+  } catch (e) {
+    console.error('Error saving wrong answers', e);
+    return loadWrongAnswers();
+  }
+};
+
+// Remove a single wrong entry (e.g. user got it right on a re-practice quiz).
+export const removeWrongAnswer = (itemId) => {
+  try {
+    const current = loadWrongAnswers();
+    const updated = current.filter(e => e.itemId !== itemId);
+    localStorage.setItem(WRONG_KEY, JSON.stringify(updated));
+    return updated;
+  } catch (e) {
+    console.error('Error removing wrong answer', e);
+    return loadWrongAnswers();
+  }
+};
+
+// Remove all wrong entries (e.g. user cleared history).
+export const clearWrongAnswers = () => {
+  try {
+    localStorage.removeItem(WRONG_KEY);
+    return [];
+  } catch (e) {
+    console.error('Error clearing wrong answers', e);
+    return [];
+  }
 };

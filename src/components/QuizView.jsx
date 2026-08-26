@@ -1,46 +1,76 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { 
-  Zap, 
-  Clock, 
-  CheckCircle2, 
-  XCircle, 
-  Trophy, 
-  RotateCcw, 
-  ArrowRight, 
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import {
+  Zap,
+  Clock,
+  CheckCircle2,
+  XCircle,
+  Trophy,
+  RotateCcw,
+  ArrowRight,
   Award,
   AlertTriangle,
   Home,
   Check,
   X,
   HelpCircle,
-  Sparkles
+  Sparkles,
+  AlertOctagon,
+  Filter
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { generateQuiz } from '../utils/quizGenerator';
+import {
+  loadWrongAnswers,
+  addWrongAnswers,
+  removeWrongAnswer
+} from '../utils/storage';
+
+// ---------------------------------------------------------------------------
+// Letter-filter alphabets used by the quiz setup screen.
+// Mirrors what ReadingTabs uses, but lives here so the quiz can be
+// configured without a separate "reading" session.
+// ---------------------------------------------------------------------------
+const BENGALI_LETTERS = ['অ', 'আ', 'ই', 'ঈ', 'উ', 'ঋ', 'এ', 'ঐ', 'ও', 'ঔ', 'ক', 'খ', 'গ', 'ঘ', 'চ', 'ছ', 'জ', 'ঝ', 'ট', 'ঠ', 'ড', 'ঢ', 'ত', 'থ', 'দ', 'ধ', 'ন', 'প', 'ফ', 'ব', 'ভ', 'ম', 'য', 'র', 'ল', 'শ', 'ষ', 'স', 'হ'];
+const ENGLISH_LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'];
 
 export default function QuizView({ databaseData, onQuizComplete, onReturnHome, initialItemToPractice = null }) {
-  // Quiz Setup State
+  // -------- Setup state --------
+  // quizMode: 'normal' (fresh quiz) | 'wrong' (re-practice from saved wrong answers)
+  const [quizMode, setQuizMode] = useState('normal');
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [letterFilter, setLetterFilter] = useState('ALL');
   const [questionCount, setQuestionCount] = useState(10);
   const [isInstantFeedback, setIsInstantFeedback] = useState(true);
 
-  // Active Quiz State
-  const [quizState, setQuizState] = useState('setup'); // 'setup', 'active', 'results'
+  // -------- Active quiz state --------
+  const [quizState, setQuizState] = useState('setup'); // 'setup' | 'active' | 'results'
   const [questions, setQuestions] = useState([]);
   const [currentQuestionIdx, setCurrentQuestionIdx] = useState(0);
-  const [userAnswers, setUserAnswers] = useState({}); // { qIndex: selectedOption }
+  const [userAnswers, setUserAnswers] = useState({});
   const [timeRemainingSeconds, setTimeLimitSeconds] = useState(600);
-  const [quizTitle, setQuizName] = useState('সকল বিষয়');
+  const [quizTitle, setQuizName] = useState('সকল বিষয়');
   const timerRef = useRef(null);
   const startTimeRef = useRef(null);
+
+  // -------- Live wrong-answers count for the setup header --------
+  const [wrongAnswers, setWrongAnswers] = useState(() => loadWrongAnswers());
 
   // Handle auto practice from single item
   useEffect(() => {
     if (initialItemToPractice) {
-      // Start a 5-question quiz centered on or containing this item
-      startCustomQuiz('all', 5);
+      // Single-item practice uses the normal "fresh quiz" generator.
+      setQuizMode('normal');
+      startCustomQuiz('all', 5, 'ALL', null);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialItemToPractice]);
+
+  // When category changes, reset the letter filter to ALL (different category
+  // uses a different alphabet — keeping the previous selection would be
+  // confusing).
+  useEffect(() => {
+    setLetterFilter('ALL');
+  }, [selectedCategory]);
 
   // Timer Countdown Effect
   useEffect(() => {
@@ -50,7 +80,7 @@ export default function QuizView({ databaseData, onQuizComplete, onReturnHome, i
         setTimeLimitSeconds((prev) => {
           if (prev <= 1) {
             clearInterval(timerRef.current);
-            finishQuiz(userAnswers); // Auto submit on timer expire
+            finishQuiz(userAnswers);
             return 0;
           }
           return prev - 1;
@@ -63,17 +93,47 @@ export default function QuizView({ databaseData, onQuizComplete, onReturnHome, i
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quizState]);
 
-  const startCustomQuiz = (catKey, countVal) => {
+  // Letters available for the current category. paribhashik uses English,
+  // everything else uses Bengali. "all" falls back to Bengali because all of
+  // the Bengali-category words are present in "all".
+  const filterLetters = useMemo(() => {
+    if (selectedCategory === 'paribhashik') return ENGLISH_LETTERS;
+    return BENGALI_LETTERS;
+  }, [selectedCategory]);
+
+  // Items relevant for the current setup (used to give a "এই ফিল্টারে কতটি
+  // শব্দ আছে" hint and to short-circuit when the pool is empty).
+  const letterFilteredCount = useMemo(() => {
+    if (quizMode === 'wrong') return wrongAnswers.length;
+    let items = [];
+    if (selectedCategory === 'all') {
+      Object.values(databaseData.items).forEach(arr => items = items.concat(arr));
+    } else if (databaseData.items[selectedCategory]) {
+      items = databaseData.items[selectedCategory];
+    }
+    if (letterFilter === 'ALL') return items.length;
+    const lower = letterFilter.toLowerCase();
+    const upper = letterFilter.toUpperCase();
+    return items.filter(it => {
+      const t = (it.term || '').trim();
+      return t.startsWith(letterFilter) || t.startsWith(lower) || t.startsWith(upper);
+    }).length;
+  }, [quizMode, selectedCategory, letterFilter, databaseData, wrongAnswers]);
+
+  const startCustomQuiz = (catKey, countVal, letter, wrongPool) => {
     const generated = generateQuiz(databaseData, {
       category: catKey,
       count: countVal,
-      timeLimitMinutes: countVal // Time limit in minutes equal to question count!
+      timeLimitMinutes: countVal,
+      letter: letter || 'ALL',
+      wrongPool: wrongPool || null
     });
 
     if (generated.questions.length === 0) {
-      alert('পরীক্ষার জন্য পর্যাপ্ত প্রশ্ন প্রস্তুত করা যায়নি।');
+      alert('পরীক্ষার জন্য পর্যাপ্ত প্রশ্ন প্রস্তুত করা যায়নি। অনুগ্রহ করে অন্য ফিল্টার বেছে নিন।');
       return;
     }
 
@@ -83,6 +143,20 @@ export default function QuizView({ databaseData, onQuizComplete, onReturnHome, i
     setCurrentQuestionIdx(0);
     setUserAnswers({});
     setQuizState('active');
+  };
+
+  const handleStart = () => {
+    if (quizMode === 'wrong') {
+      if (wrongAnswers.length === 0) {
+        alert('আপনার সংরক্ষিত ভুল উত্তরের তালিকা খালি। প্রথমে একটি সাধারণ কুইজ দিন।');
+        return;
+      }
+      const poolSize = wrongAnswers.length;
+      const count = Math.min(questionCount, poolSize);
+      startCustomQuiz('all', count, 'ALL', wrongAnswers);
+    } else {
+      startCustomQuiz(selectedCategory, questionCount, letterFilter, null);
+    }
   };
 
   const handleOptionSelect = (option) => {
@@ -102,11 +176,14 @@ export default function QuizView({ databaseData, onQuizComplete, onReturnHome, i
     if (timerRef.current) clearInterval(timerRef.current);
 
     const timeSpent = Math.max(1, Math.floor((Date.now() - (startTimeRef.current || Date.now())) / 1000));
-    
+
     let rightCount = 0;
     let wrongCount = 0;
     const categoryBreakdown = {};
 
+    // We need stable, per-item info to (a) update per-category stats and
+    // (b) save wrong answers to persistent storage. Each question already
+    // carries `itemId` and `originalItem` from the generator.
     const details = questions.map((q, idx) => {
       const uAns = finalAnswers[idx];
       const isCorrect = uAns === q.correctAnswer;
@@ -129,6 +206,51 @@ export default function QuizView({ databaseData, onQuizComplete, onReturnHome, i
         categoryName: q.categoryName
       };
     });
+
+    // Build the list of wrong entries to persist. We always save a wrong
+    // answer for non-correct questions (even in re-practice mode — that
+    // means a re-retry refreshes the saved record). On the other hand, if
+    // a wrong-pool question is now answered correctly, we drop it from the
+    // saved list so the user can see their progress.
+    const wrongEntriesToSave = [];
+    const wrongItemIdsToRemove = [];
+
+    questions.forEach((q) => {
+      const isCorrect = finalAnswers[questions.indexOf(q)] === q.correctAnswer;
+      if (isCorrect) {
+        // Only drop the saved wrong entry if this was a re-practice session.
+        if (quizMode === 'wrong' && q.itemId) {
+          wrongItemIdsToRemove.push(q.itemId);
+        }
+      } else {
+        if (q.itemId && q.originalItem) {
+          wrongEntriesToSave.push({
+            itemId: q.itemId,
+            category: q.category,
+            categoryName: q.categoryName,
+            term: q.originalItem.term,
+            meaning: q.originalItem.meaning,
+            // For somarthok we want the rich display info preserved so a
+            // future review/ItemCard-style view can show both columns.
+            examSynonyms: q.originalItem.examSynonyms || '',
+            extraSynonyms: q.originalItem.extraSynonyms || '',
+            correctAnswer: q.correctAnswer,
+            prompt: q.prompt
+          });
+        }
+      }
+    });
+
+    // Apply persistent updates.
+    if (wrongEntriesToSave.length > 0) {
+      addWrongAnswers(wrongEntriesToSave);
+    }
+    if (wrongItemIdsToRemove.length > 0) {
+      wrongItemIdsToRemove.forEach(id => removeWrongAnswer(id));
+    }
+
+    // Refresh local cache so the setup screen shows the latest count.
+    setWrongAnswers(loadWrongAnswers());
 
     const accuracy = questions.length > 0 ? Math.round((rightCount / questions.length) * 100) : 0;
 
@@ -173,7 +295,7 @@ export default function QuizView({ databaseData, onQuizComplete, onReturnHome, i
   if (quizState === 'setup') {
     return (
       <div className="space-y-6 pb-24 pt-4 px-4 max-w-2xl mx-auto">
-        
+
         {/* Setup Banner */}
         <div className="bg-gradient-to-br from-peach-100 via-cream-100 to-mint-100 p-6 rounded-2xl border border-peach-200 shadow-retro text-center space-y-2">
           <div className="w-14 h-14 rounded-2xl bg-peach-300 text-white flex items-center justify-center mx-auto shadow-retro border border-peach-400">
@@ -183,59 +305,150 @@ export default function QuizView({ databaseData, onQuizComplete, onReturnHome, i
             অনলাইন বিহীন কুইজ পরীক্ষা
           </h2>
           <p className="text-xs text-warmcharcoal-200 max-w-md mx-auto">
-            আপনার সুবিধামত বিষয়, প্রশ্নের সংখ্যা এবং সময় সীমা নির্ধারণ করে অটো-জেনারেটেড পরীক্ষায় অংশগ্রহণ করুন।
+            আপনার সুবিধামত বিষয়, প্রশ্নের সংখ্যা এবং সময় সীমা নির্ধারণ করে অটো-জেনারেটেড পরীক্ষায় অংশগ্রহণ করুন।
           </p>
         </div>
 
         {/* Configuration Card */}
         <div className="bg-cream-100 p-5 rounded-2xl border border-peach-200 shadow-retro space-y-5">
-          
-          {/* Category Selector */}
+
+          {/* Quiz Mode (Normal vs Wrong-Answer Re-Practice) */}
           <div>
             <label className="block text-xs font-bold text-warmcharcoal-300 mb-2">
-              ১. বিষয় নির্বাচন করুন:
+              ১. কুইজের ধরন:
             </label>
             <div className="grid grid-cols-2 gap-2.5">
               <button
-                onClick={() => setSelectedCategory('all')}
+                onClick={() => setQuizMode('normal')}
                 className={`p-3 rounded-xl border text-left font-bold text-xs transition-all ${
-                  selectedCategory === 'all'
+                  quizMode === 'normal'
                     ? 'bg-peach-300 text-white border-peach-400 shadow-retro-sm scale-[1.02]'
                     : 'bg-cream-50 text-warmcharcoal-200 border-cream-300 hover:bg-peach-50'
                 }`}
               >
-                <div>সকল বিষয় অন্তর্ভুক্ত</div>
-                <div className="text-[10px] font-normal opacity-90 mt-0.5">{formatBnNumber((databaseData.totalCount || 0).toLocaleString('en-US'))} টি প্রশ্ন থেকে র্যান্ডম</div>
+                <div className="flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4" />
+                  নতুন প্রশ্ন
+                </div>
+                <div className="text-[10px] font-normal opacity-90 mt-0.5">পুরো ডাটাবেস থেকে র‍্যান্ডম প্রশ্ন</div>
               </button>
 
-              {Object.entries(databaseData.categories).map(([catKey, catInfo]) => (
+              <button
+                onClick={() => setQuizMode('wrong')}
+                className={`p-3 rounded-xl border text-left font-bold text-xs transition-all ${
+                  quizMode === 'wrong'
+                    ? 'bg-retrorose text-white border-red-600 shadow-retro-sm scale-[1.02]'
+                    : 'bg-cream-50 text-warmcharcoal-200 border-cream-300 hover:bg-peach-50'
+                }`}
+              >
+                <div className="flex items-center gap-1.5">
+                  <AlertOctagon className="w-4 h-4" />
+                  ভুল উত্তর থেকে
+                </div>
+                <div className="text-[10px] font-normal opacity-90 mt-0.5">
+                  সংরক্ষিত {formatBnNumber(wrongAnswers.length)} টি ভুল প্রশ্ন
+                </div>
+              </button>
+            </div>
+          </div>
+
+          {/* Category Selector (only in normal mode) */}
+          {quizMode === 'normal' && (
+            <div>
+              <label className="block text-xs font-bold text-warmcharcoal-300 mb-2">
+                ২. বিষয় নির্বাচন করুন:
+              </label>
+              <div className="grid grid-cols-2 gap-2.5">
                 <button
-                  key={catKey}
-                  onClick={() => setSelectedCategory(catKey)}
+                  onClick={() => setSelectedCategory('all')}
                   className={`p-3 rounded-xl border text-left font-bold text-xs transition-all ${
-                    selectedCategory === catKey
+                    selectedCategory === 'all'
                       ? 'bg-peach-300 text-white border-peach-400 shadow-retro-sm scale-[1.02]'
                       : 'bg-cream-50 text-warmcharcoal-200 border-cream-300 hover:bg-peach-50'
                   }`}
                 >
-                  <div>{catInfo.name}</div>
-                  <div className="text-[10px] font-normal opacity-90 mt-0.5">{formatBnNumber(catInfo.count)} টি শব্দ</div>
+                  <div>সকল বিষয় অন্তর্ভুক্ত</div>
+                  <div className="text-[10px] font-normal opacity-90 mt-0.5">{formatBnNumber((databaseData.totalCount || 0).toLocaleString('en-US'))} টি প্রশ্ন থেকে র্যান্ডম</div>
                 </button>
-              ))}
+
+                {Object.entries(databaseData.categories).map(([catKey, catInfo]) => (
+                  <button
+                    key={catKey}
+                    onClick={() => setSelectedCategory(catKey)}
+                    className={`p-3 rounded-xl border text-left font-bold text-xs transition-all ${
+                      selectedCategory === catKey
+                        ? 'bg-peach-300 text-white border-peach-400 shadow-retro-sm scale-[1.02]'
+                        : 'bg-cream-50 text-warmcharcoal-200 border-cream-300 hover:bg-peach-50'
+                    }`}
+                  >
+                    <div>{catInfo.name}</div>
+                    <div className="text-[10px] font-normal opacity-90 mt-0.5">{formatBnNumber(catInfo.count)} টি শব্দ</div>
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* Letter-based quick filter (only in normal mode) */}
+          {quizMode === 'normal' && (
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs font-bold text-warmcharcoal-300 flex items-center gap-1.5">
+                  <Filter className="w-3.5 h-3.5" />
+                  ৩. বর্ণ দিয়ে ফিল্টার
+                  {selectedCategory !== 'all' && (
+                    <span className="text-[10px] font-normal text-warmcharcoal-100">
+                      ({selectedCategory === 'paribhashik' ? 'English A–Z' : 'বাংলা অ–হ'})
+                    </span>
+                  )}
+                </label>
+                <span className="text-[11px] font-bold text-peach-500 bg-peach-100 px-2.5 py-0.5 rounded-full border border-peach-200">
+                  মোট {formatBnNumber(letterFilteredCount)} টি
+                </span>
+              </div>
+
+              <div className="flex items-center gap-1 overflow-x-auto pb-1 no-scrollbar">
+                <button
+                  onClick={() => setLetterFilter('ALL')}
+                  className={`flex-shrink-0 px-3 h-8 rounded-lg font-bold text-xs border transition-colors ${
+                    letterFilter === 'ALL'
+                      ? 'bg-peach-400 text-white border-peach-500 shadow-retro-sm'
+                      : 'bg-cream-50 text-warmcharcoal-200 border-cream-300 hover:bg-peach-100'
+                  }`}
+                >
+                  সব
+                </button>
+                {filterLetters.map((letter) => {
+                  const isSel = letterFilter === letter;
+                  return (
+                    <button
+                      key={letter}
+                      onClick={() => setLetterFilter(letter)}
+                      className={`flex-shrink-0 w-8 h-8 rounded-lg font-bold text-xs border transition-colors flex items-center justify-center ${
+                        isSel
+                          ? 'bg-peach-400 text-white border-peach-500 shadow-retro-sm'
+                          : 'bg-cream-50 text-warmcharcoal-200 border-cream-300 hover:bg-peach-100'
+                      }`}
+                    >
+                      {letter}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Question Count & Time Limit Selector */}
           <div>
             <div className="flex items-center justify-between mb-2">
               <label className="text-xs font-bold text-warmcharcoal-300">
-                ২. প্রশ্নের সংখ্যা ও সময় সীমা:
+                {quizMode === 'normal' ? '৪.' : '২.'} প্রশ্নের সংখ্যা ও সময় সীমা:
               </label>
               <span className="text-[11px] font-bold text-peach-500 bg-peach-100 px-2.5 py-0.5 rounded-full border border-peach-200">
                 {formatBnNumber(questionCount)} প্রশ্ন = {formatBnNumber(questionCount)} মিনিট
               </span>
             </div>
-            
+
             <div className="flex items-center gap-2 overflow-x-auto pb-1">
               {[5, 10, 15, 20, 25, 30].map((num) => (
                 <button
@@ -252,7 +465,7 @@ export default function QuizView({ databaseData, onQuizComplete, onReturnHome, i
               ))}
             </div>
             <p className="text-[11px] text-warmcharcoal-100 mt-1">
-              * প্রতি প্রশ্নের জন্য ১ মিনিট সময় বরাদ্দ রাখা হয় ( e.g. {formatBnNumber(questionCount)} টি প্রশ্ন = {formatBnNumber(questionCount)} মিনিট সময় )
+              * প্রতি প্রশ্নের জন্য ১ মিনিট সময় বরাদ্দ রাখা হয় ( e.g. {formatBnNumber(questionCount)} টি প্রশ্ন = {formatBnNumber(questionCount)} মিনিট সময় )
             </p>
           </div>
 
@@ -276,11 +489,12 @@ export default function QuizView({ databaseData, onQuizComplete, onReturnHome, i
 
           {/* Start Button */}
           <button
-            onClick={() => startCustomQuiz(selectedCategory, questionCount)}
-            className="w-full py-3.5 bg-peach-400 hover:bg-peach-500 text-white font-bold text-base rounded-xl shadow-retro transition-all hover:scale-[1.01] active:scale-95 flex items-center justify-center gap-2 border border-peach-500"
+            onClick={handleStart}
+            disabled={quizMode === 'wrong' && wrongAnswers.length === 0}
+            className="w-full py-3.5 bg-peach-400 hover:bg-peach-500 text-white font-bold text-base rounded-xl shadow-retro transition-all hover:scale-[1.01] active:scale-95 flex items-center justify-center gap-2 border border-peach-500 disabled:opacity-50 disabled:hover:scale-100"
           >
             <Zap className="w-5 h-5 fill-current" />
-            পরীক্ষা শুরু করুন
+            {quizMode === 'wrong' ? `ভুল উত্তর থেকে পরীক্ষা শুরু করুন (${formatBnNumber(Math.min(questionCount, wrongAnswers.length))} টি)` : 'পরীক্ষা শুরু করুন'}
           </button>
 
         </div>
@@ -299,10 +513,10 @@ export default function QuizView({ databaseData, onQuizComplete, onReturnHome, i
 
     return (
       <div className="space-y-4 pb-24 pt-4 px-4 max-w-2xl mx-auto">
-        
+
         {/* Active Quiz Sticky Header */}
         <div className="bg-cream-100 p-4 rounded-2xl border border-peach-200 shadow-retro space-y-3">
-          
+
           <div className="flex items-center justify-between">
             {/* Category & Counter */}
             <div>
@@ -316,8 +530,8 @@ export default function QuizView({ databaseData, onQuizComplete, onReturnHome, i
 
             {/* Countdown Timer */}
             <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl font-bold text-xs border ${
-              isLowTime 
-                ? 'bg-peach-100 text-retrorose border-peach-300 animate-bounce' 
+              isLowTime
+                ? 'bg-peach-100 text-retrorose border-peach-300 animate-bounce'
                 : 'bg-mint-100 text-mint-500 border-mint-200'
             }`}>
               <Clock className="w-4 h-4" />
@@ -327,7 +541,7 @@ export default function QuizView({ databaseData, onQuizComplete, onReturnHome, i
 
           {/* Progress Bar */}
           <div className="w-full bg-cream-300 h-2 rounded-full overflow-hidden">
-            <div 
+            <div
               className="bg-peach-400 h-full transition-all duration-300 rounded-full"
               style={{ width: `${progressPct}%` }}
             />
@@ -346,7 +560,7 @@ export default function QuizView({ databaseData, onQuizComplete, onReturnHome, i
             {currentQuestion.options.map((option, idx) => {
               const isSelected = selectedOption === option;
               const isCorrectOption = option === currentQuestion.correctAnswer;
-              
+
               let btnStyle = 'bg-cream-50 text-warmcharcoal-300 border-cream-300 hover:bg-peach-50';
 
               if (isInstantFeedback && isAnswered) {
@@ -419,7 +633,7 @@ export default function QuizView({ databaseData, onQuizComplete, onReturnHome, i
 
     return (
       <div className="space-y-6 pb-24 pt-4 px-4 max-w-2xl mx-auto animate-in fade-in duration-300">
-        
+
         {/* Results Banner Header */}
         <div className="bg-gradient-to-br from-peach-100 via-cream-100 to-mint-100 p-6 rounded-2xl border border-peach-200 shadow-retro text-center space-y-3">
           <div className="w-16 h-16 rounded-full bg-peach-200 text-peach-500 border border-peach-300 flex items-center justify-center mx-auto shadow-retro">
@@ -428,10 +642,10 @@ export default function QuizView({ databaseData, onQuizComplete, onReturnHome, i
 
           <div>
             <h2 className="text-2xl font-extrabold text-warmcharcoal-300">
-              {accuracyPct >= 80 ? 'অসাধারণ পারফরম্যান্স! 🏆' : accuracyPct >= 50 ? 'চমৎকার প্রচেষ্টা! 👍' : 'আরও অনুশীলন প্রয়োজন! 📚'}
+              {accuracyPct >= 80 ? 'অসাধারণ পারফরম্যান্স! 🏆' : accuracyPct >= 50 ? 'চমৎকার প্রচেষ্টা! 👍' : 'আরও অনুশীলন প্রয়োজন! 📚'}
             </h2>
             <p className="text-xs text-warmcharcoal-200 mt-1">
-              কুইজের ফলাফল আপনার অফলাইন ড্যাশবোর্ডে সংরক্ষিত হয়েছে
+              কুইজের ফলাফল আপনার অফলাইন ড্যাশবোর্ডে সংরক্ষিত হয়েছে
             </p>
           </div>
 
@@ -472,7 +686,7 @@ export default function QuizView({ databaseData, onQuizComplete, onReturnHome, i
               const isCorrect = uAns === q.correctAnswer;
 
               return (
-                <div 
+                <div
                   key={idx}
                   className={`p-3.5 rounded-xl border space-y-2 text-xs ${
                     isCorrect ? 'bg-mint-50/80 border-mint-200' : 'bg-peach-50/80 border-peach-200'
@@ -487,7 +701,7 @@ export default function QuizView({ databaseData, onQuizComplete, onReturnHome, i
                     <span className={`px-2.5 py-0.5 rounded font-semibold ${
                       isCorrect ? 'bg-mint-200 text-mint-500' : 'bg-peach-200 text-retrorose'
                     }`}>
-                      আপনার দেওয়া উত্তর: {uAns || 'উত্তর দেওয়া হয়নি'}
+                      আপনার দেওয়া উত্তর: {uAns || 'উত্তর দেওয়া হয়নি'}
                     </span>
                     {!isCorrect && (
                       <span className="bg-mint-200 text-mint-500 px-2.5 py-0.5 rounded font-semibold">
@@ -508,7 +722,7 @@ export default function QuizView({ databaseData, onQuizComplete, onReturnHome, i
             className="flex-1 py-3 bg-cream-200 hover:bg-cream-300 text-warmcharcoal-300 font-bold text-xs rounded-xl border border-cream-400 transition-colors flex items-center justify-center gap-1.5"
           >
             <RotateCcw className="w-4 h-4" />
-            পুনরায় পরীক্ষা দিন
+            পুনরায় পরীক্ষা দিন
           </button>
 
           <button
@@ -516,7 +730,7 @@ export default function QuizView({ databaseData, onQuizComplete, onReturnHome, i
             className="flex-1 py-3 bg-peach-400 hover:bg-peach-500 text-white font-bold text-xs rounded-xl shadow-retro transition-all border border-peach-500 flex items-center justify-center gap-1.5"
           >
             <Home className="w-4 h-4" />
-            পরিসংখ্যান পাতায় যান
+            পরিসংখ্যান পাতায় যান
           </button>
         </div>
 
