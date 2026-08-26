@@ -1,4 +1,7 @@
 // Random MCQ Quiz Generator from Birochon dataset
+// Supports two generation modes:
+//  - normal: from the full database (optionally filtered by category / letter)
+//  - wrongOnly: from a pre-saved list of "wrong answer" items (re-practice)
 
 function shuffleArray(array) {
   const arr = [...array];
@@ -9,14 +12,33 @@ function shuffleArray(array) {
   return arr;
 }
 
+// Build the actual displayed "meaning" string for a somarthok item.
+// When BOTH synonym columns are present we show the union; if only one is
+// present (the user's Excel sometimes has just 1 column for some rows) we
+// fall back to that.
+function getSomarthokMeaning(item) {
+  const exam = (item.examSynonyms || '').trim();
+  const extra = (item.extraSynonyms || '').trim();
+  if (exam && extra) return `${exam}, ${extra}`;
+  return exam || extra || (item.meaning || '').trim();
+}
+
 export const generateQuiz = (allData, config) => {
-  const { category = 'all', count = 10, timeLimitMinutes = 10 } = config;
+  const {
+    category = 'all',
+    count = 10,
+    timeLimitMinutes = 10,
+    letter = 'ALL',           // 'ALL' | a specific Bengali char like 'অ' or English like 'A'
+    wrongPool = null          // when non-null, only these items are used
+  } = config;
 
   let pool = [];
   let categoryMap = allData.items;
 
-  if (category === 'all') {
-    // combine items from all categories
+  if (wrongPool && Array.isArray(wrongPool) && wrongPool.length > 0) {
+    // Re-practice mode: pool = saved wrong items directly
+    pool = [...wrongPool];
+  } else if (category === 'all') {
     Object.keys(categoryMap).forEach(catKey => {
       pool = pool.concat(categoryMap[catKey]);
     });
@@ -24,8 +46,23 @@ export const generateQuiz = (allData, config) => {
     pool = [...categoryMap[category]];
   }
 
+  // Apply letter filter (case-insensitive startsWith)
+  if (letter && letter !== 'ALL' && pool.length > 0) {
+    const lower = letter.toLowerCase();
+    const upper = letter.toUpperCase();
+    pool = pool.filter(item => {
+      const t = (item.term || '').trim();
+      return t.startsWith(letter) || t.startsWith(lower) || t.startsWith(upper);
+    });
+  }
+
   if (pool.length === 0) {
-    return { questions: [], timeLimitSeconds: timeLimitMinutes * 60 };
+    return {
+      questions: [],
+      timeLimitSeconds: timeLimitMinutes * 60,
+      categoryName: category === 'all' ? 'সকল বিষয়' : (allData.categories[category]?.name || 'বিবিধ'),
+      poolSize: 0
+    };
   }
 
   // Shuffle pool and select 'count' items
@@ -50,20 +87,26 @@ export const generateQuiz = (allData, config) => {
       correctAnswer = item.meaning;
       distractorPool = categoryMap.paribhashik.filter(i => i.id !== item.id).map(i => i.meaning);
     } else if (cat === 'somarthok') {
-      // meaning is a comma-separated list of synonyms.
-      // Show ONE randomly chosen synonym as the correct answer, and use
-      // single synonyms (from other words' lists) as distractor options.
-      const synonyms = item.meaning.split(',').map(s => s.trim()).filter(Boolean);
-      const chosen = synonyms.length > 0
-        ? synonyms[Math.floor(Math.random() * synonyms.length)]
-        : item.meaning;
+      // We have two synonym columns now. Pool of candidates: every synonym
+      // from every somarthok item (both examSynonyms & extraSynonyms).
+      const correctFull = getSomarthokMeaning(item);
+      const allSynonyms = correctFull.split(',').map(s => s.trim()).filter(Boolean);
+      // Pick one random synonym as the "correct" answer for the MCQ, so the
+      // question remains identical to before but the distractor pool is
+      // automatically richer.
+      const chosen = allSynonyms.length > 0
+        ? allSynonyms[Math.floor(Math.random() * allSynonyms.length)]
+        : correctFull;
       prompt = `"${item.term}" - এর সঠিক সমার্থক শব্দ কোনটি?`;
       correctAnswer = chosen;
       distractorPool = categoryMap.somarthok
         .filter(i => i.id !== item.id)
-        .flatMap(i => i.meaning.split(',').map(s => s.trim()))
-        // exclude any word that is also a valid synonym of the current term (or the term itself)
-        .filter(s => s && !synonyms.includes(s) && s !== item.term);
+        .flatMap(i => {
+          const a = (i.examSynonyms || '').split(',').map(s => s.trim()).filter(Boolean);
+          const b = (i.extraSynonyms || '').split(',').map(s => s.trim()).filter(Boolean);
+          return [...a, ...b];
+        })
+        .filter(s => s && !allSynonyms.includes(s) && s !== item.term);
     } else if (cat === 'ekkothay') {
       // 50% chance term -> meaning or meaning -> term
       if (Math.random() > 0.5) {
@@ -84,7 +127,7 @@ export const generateQuiz = (allData, config) => {
     // Pick 3 unique distractors
     const shuffledDistractors = shuffleArray(Array.from(new Set(distractorPool)));
     const selectedDistractors = shuffledDistractors.slice(0, 3);
-    
+
     // Fallback if not enough unique distractors
     while (selectedDistractors.length < 3) {
       selectedDistractors.push(`বিকল্প উত্তর ${selectedDistractors.length + 1}`);
@@ -92,9 +135,12 @@ export const generateQuiz = (allData, config) => {
 
     const options = shuffleArray([correctAnswer, ...selectedDistractors]);
 
+    // For wrong-answer saving we need a stable id that survives quizzes.
+    // The original `item.id` is stable across regenerations, so use that.
     return {
-      id: `q_${idx + 1}_${item.id}`,
-      originalItem: item,
+      id: `q_${item.id}_${idx}`,
+      itemId: item.id,                    // stable across regenerations
+      originalItem: item,                 // full item, useful for "save wrong" persistence
       category: item.category,
       categoryName: item.categoryName,
       prompt,
@@ -104,12 +150,15 @@ export const generateQuiz = (allData, config) => {
   });
 
   // Calculate time limit in seconds (1 minute per question default as per prompt)
-  // E.g., count questions -> count minutes limit
   const timeLimitSeconds = (timeLimitMinutes || count) * 60;
+
+  const baseName = category === 'all' ? 'সকল বিষয়' : (allData.categories[category]?.name || 'বিবিধ');
+  const letterSuffix = letter && letter !== 'ALL' ? ` (${letter}…)` : '';
 
   return {
     questions,
     timeLimitSeconds,
-    categoryName: category === 'all' ? 'সকল বিষয়' : (allData.categories[category]?.name || 'বিবিধ')
+    categoryName: baseName + letterSuffix,
+    poolSize: pool.length
   };
 };

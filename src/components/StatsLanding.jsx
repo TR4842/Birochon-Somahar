@@ -34,10 +34,10 @@ export default function StatsLanding({ stats, onStartQuiz, onResetStats, databas
   };
 
   const categories = [
-    { key: 'bagdhara', name: 'বাংলা বাগধারা', count: databaseInfo?.categories?.bagdhara?.count || 648, color: 'peach' },
-    { key: 'biporit', name: 'বিপরীত শব্দ', count: databaseInfo?.categories?.biporit?.count || 160, color: 'mint' },
-    { key: 'paribhashik', name: 'পারিভাষিক শব্দ', count: databaseInfo?.categories?.paribhashik?.count || 924, color: 'babyblue' },
-    { key: 'ekkothay', name: 'এককথায় প্রকাশ', count: databaseInfo?.categories?.ekkothay?.count || 59, color: 'retrogold' },
+    { key: 'bagdhara', name: 'বাংলা বাগধারা', count: databaseInfo?.categories?.bagdhara?.count || 0, color: 'peach' },
+    { key: 'biporit', name: 'বিপরীত শব্দ', count: databaseInfo?.categories?.biporit?.count || 0, color: 'mint' },
+    { key: 'paribhashik', name: 'পারিভাষিক শব্দ', count: databaseInfo?.categories?.paribhashik?.count || 0, color: 'babyblue' },
+    { key: 'ekkothay', name: 'এককথায় প্রকাশ', count: databaseInfo?.categories?.ekkothay?.count || 0, color: 'retrogold' },
     { key: 'somarthok', name: 'সমার্থক শব্দ', count: databaseInfo?.categories?.somarthok?.count || 0, color: 'retrorose' }
   ];
 
@@ -374,25 +374,25 @@ export default function StatsLanding({ stats, onStartQuiz, onResetStats, databas
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 text-center">
           <div className="p-3 bg-peach-50 rounded-xl border border-peach-200">
             <div className="text-lg font-bold text-warmcharcoal-300">
-              {formatBnNumber(databaseInfo?.categories?.bagdhara?.count || 648)}
+              {formatBnNumber(databaseInfo?.categories?.bagdhara?.count || 0)}
             </div>
             <div className="text-xs text-warmcharcoal-200 mt-0.5">বাগধারা</div>
           </div>
           <div className="p-3 bg-mint-50 rounded-xl border border-mint-200">
             <div className="text-lg font-bold text-warmcharcoal-300">
-              {formatBnNumber(databaseInfo?.categories?.biporit?.count || 160)}
+              {formatBnNumber(databaseInfo?.categories?.biporit?.count || 0)}
             </div>
             <div className="text-xs text-warmcharcoal-200 mt-0.5">বিপরীত শব্দ</div>
           </div>
           <div className="p-3 bg-babyblue-50 rounded-xl border border-babyblue-200">
             <div className="text-lg font-bold text-warmcharcoal-300">
-              {formatBnNumber(databaseInfo?.categories?.paribhashik?.count || 924)}
+              {formatBnNumber(databaseInfo?.categories?.paribhashik?.count || 0)}
             </div>
             <div className="text-xs text-warmcharcoal-200 mt-0.5">পারিভাষিক শব্দ</div>
           </div>
           <div className="p-3 bg-retrogold/20 rounded-xl border border-retrogold/40">
             <div className="text-lg font-bold text-warmcharcoal-300">
-              {formatBnNumber(databaseInfo?.categories?.ekkothay?.count || 59)}
+              {formatBnNumber(databaseInfo?.categories?.ekkothay?.count || 0)}
             </div>
             <div className="text-xs text-warmcharcoal-200 mt-0.5">এককথায় প্রকাশ</div>
           </div>
