@@ -1,11 +1,13 @@
 {
   "name": "birochon-somahar",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "build": "python3 scripts/parse_excel.py && vite build",
+    "version:check": "node scripts/check_version.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "build": "npm run version:check && python3 scripts/parse_excel.py && vite build",
     "preview": "vite preview",
     "cap:build": "npm run build && npx cap sync"
   },
@@ -23,6 +25,7 @@
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.0",
     "autoprefixer": "^10.4.19",
+    "jsdom": "^26.1.0",
     "postcss": "^8.4.38",
     "tailwindcss": "^3.4.3",
     "vite": "^5.2.11"

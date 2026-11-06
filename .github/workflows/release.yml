@@ -1,0 +1,183 @@
+name: Publish GitHub Release (signed APK + update.json)
+
+# Two ways to publish an UPDATE:
+#   1. git tag v1.1.0 && git push origin v1.1.0
+#   2. Actions → "Publish GitHub Release" → Run workflow (tick "Create GitHub Release")
+# Either way the release carries the APK, update.json, SHA256SUMS.txt and the
+# changelog — exactly what the app's "আপডেট আছে কি দেখুন" option reads.
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Expected version (leave blank = version.json). A mismatch fails fast.'
+        required: false
+        default: ''
+      tag:
+        description: 'Release tag (leave blank = v<version>)'
+        required: false
+        default: ''
+      publish_release:
+        description: 'Create / update the GitHub Release with the APK'
+        type: boolean
+        default: true
+      prerelease:
+        description: 'Mark as pre-release'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build + publish update
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Set up Java JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Resolve version + tag
+        id: meta
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_TAG: ${{ inputs.tag }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          VERSION=$(node -p "require('./version.json').version")
+          if [ -n "$INPUT_VERSION" ] && [ "$INPUT_VERSION" != "$VERSION" ]; then
+            echo "::error::version.json says $VERSION but '$INPUT_VERSION' was requested. Bump version.json first."
+            exit 1
+          fi
+          TAG="${INPUT_TAG:-v${VERSION}}"
+          if [ "$REF_TYPE" = "tag" ] && [ "$REF_NAME" != "$TAG" ]; then
+            echo "::error::Pushed tag $REF_NAME does not match version.json ($TAG)."
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "apk_name=Birochon-Somahar-v${VERSION}.apk" >> "$GITHUB_OUTPUT"
+          echo "📦 Version: $VERSION  Tag: $TAG"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify version metadata + tests
+        run: |
+          npm run version:check
+          npm test
+
+      - name: Parse Excel Datasheets & Generate Database
+        run: python3 scripts/parse_excel.py
+
+      - name: Build Web Application
+        run: npx vite build
+
+      - name: Sync Capacitor Android Project
+        run: npx cap sync android
+
+      - name: Restore stable signing key
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/birochon-release.jks
+            echo "✅ Stable signing key restored."
+          else
+            echo "::warning::No ANDROID_KEYSTORE_BASE64 — falling back to an ephemeral debug key. Users will need the in-app backup/restore to move to a stable-signed build later."
+          fi
+
+      - name: Build signed APK
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          chmod +x android/gradlew
+          cd android
+          if [ -f app/birochon-release.jks ]; then
+            ./gradlew assembleRelease --stacktrace
+          else
+            ./gradlew assembleDebug --stacktrace
+          fi
+          cd ..
+          SRC=$(find android/app/build/outputs/apk -name '*.apk' -type f | head -1)
+          cp "$SRC" "${{ steps.meta.outputs.apk_name }}"
+          sha256sum "${{ steps.meta.outputs.apk_name }}" > SHA256SUMS.txt
+
+      - name: Verify APK signing certificate
+        env:
+          EXPECTED_SIGNATURE_SHA256: ${{ secrets.EXPECTED_SIGNATURE_SHA256 }}
+        run: bash scripts/verify_apk_signature.sh "${{ steps.meta.outputs.apk_name }}"
+
+      - name: Generate update.json + release notes
+        env:
+          APK_NAME: ${{ steps.meta.outputs.apk_name }}
+          TAG: ${{ steps.meta.outputs.tag }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          APK_URL="https://github.com/${REPOSITORY}/releases/download/${TAG}/${APK_NAME}"
+          python3 scripts/make_update_json.py \
+            --tag "$TAG" \
+            --apk-name "$APK_NAME" \
+            --apk-url "$APK_URL" \
+            --out update.json \
+            --notes-out release_notes.md
+          cat update.json
+
+      - name: Upload build artifact (always)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.meta.outputs.apk_name }}
+          path: |
+            ${{ steps.meta.outputs.apk_name }}
+            update.json
+            SHA256SUMS.txt
+          if-no-files-found: error
+
+      # This is the "option for update in GitHub Release": one click from the
+      # Actions tab (or an automatic v* tag) publishes everything the in-app
+      # updater needs.
+      - name: Create / update GitHub Release
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.publish_release == true }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.meta.outputs.tag }}
+          VERSION: ${{ steps.meta.outputs.version }}
+          APK_NAME: ${{ steps.meta.outputs.apk_name }}
+          PRERELEASE: ${{ inputs.prerelease }}
+        run: |
+          FLAG=""
+          if [ "$PRERELEASE" = "true" ]; then FLAG="--prerelease"; fi
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$APK_NAME" update.json SHA256SUMS.txt --clobber
+            gh release edit "$TAG" --notes-file release_notes.md
+            echo "✅ Existing release $TAG updated."
+          else
+            gh release create "$TAG" "$APK_NAME" update.json SHA256SUMS.txt \
+              --title "বিরচন সমাহার v${VERSION}" \
+              --notes-file release_notes.md \
+              --target "$GITHUB_SHA" $FLAG
+            echo "✅ GitHub Release $TAG published."
+          fi

@@ -1,4 +1,10 @@
 // Storage helper for offline persistence
+//
+// IMPORTANT (upgrade safety): the keys below are the SAME keys that shipped in
+// v1.0.0. Never rename or reshape them — an app update is installed on top of
+// the old APK and the WebView localStorage must survive untouched. New features
+// get NEW keys, and every reader below tolerates missing / malformed / older
+// data so a v1.0 install can open v1.1+ without any migration wipe.
 
 const STATS_KEY = 'birochon_quiz_stats_v1';
 const BOOKMARKS_KEY = 'birochon_bookmarks_v1';
@@ -6,6 +12,21 @@ const SETTINGS_KEY = 'birochon_settings_v1';
 // Persistent list of questions the user got wrong across quizzes. Used to
 // offer a "re-practice from wrong answers" quiz mode.
 const WRONG_KEY = 'birochon_wrong_v1';
+export const READING_KEY = 'birochon_reading_progress_v1';
+const META_KEY = 'birochon_app_meta_v1';
+
+export const APP_SCHEMA_VERSION = 2;
+
+// Every key owned by this app. Used by the backup/restore feature so a user can
+// carry their data across a reinstall (needed only if the signing key changes).
+export const APP_DATA_KEYS = Object.freeze([
+  STATS_KEY,
+  BOOKMARKS_KEY,
+  WRONG_KEY,
+  SETTINGS_KEY,
+  READING_KEY,
+  META_KEY
+]);
 
 export const getInitialStats = () => {
   return {
@@ -119,7 +140,8 @@ export const resetStats = () => {
 export const loadBookmarks = () => {
   try {
     const raw = localStorage.getItem(BOOKMARKS_KEY);
-    return raw ? JSON.parse(raw) : [];
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
   } catch (e) {
     return [];
   }
@@ -210,5 +232,101 @@ export const clearWrongAnswers = () => {
   } catch (e) {
     console.error('Error clearing wrong answers', e);
     return [];
+  }
+};
+
+// ============================================================================
+// Settings + in-place upgrade bookkeeping
+// ----------------------------------------------------------------------------
+// Settings live in their own key so new options can be added later without ever
+// rewriting stats / bookmarks / wrong-answer data from an older install.
+// ============================================================================
+
+export const DEFAULT_SETTINGS = Object.freeze({
+  // Offline-first: network is only used when the user turns this on (or taps
+  // the "check for update" button).
+  autoCheckUpdates: false,
+  lastUpdateCheckAt: 0,
+  dismissedUpdateTag: '',
+  // Reading: jump back to the last position automatically on a new session.
+  autoResume: true,
+  // Reading: optionally mark cards as read as they scroll off the top.
+  autoMarkRead: false
+});
+
+export const loadSettings = () => {
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return { ...DEFAULT_SETTINGS };
+    }
+    return { ...DEFAULT_SETTINGS, ...parsed };
+  } catch (e) {
+    return { ...DEFAULT_SETTINGS };
+  }
+};
+
+export const saveSettings = (patch = {}) => {
+  const updated = { ...loadSettings(), ...patch };
+  try {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(updated));
+  } catch (e) {
+    console.error('Error saving settings', e);
+  }
+  return updated;
+};
+
+// Read-only metadata about the installed build. Called once at startup.
+// It records an upgrade without touching any of the user's existing data, and
+// lets the UI reassure users that their progress survived the update.
+export const runAppMigration = (currentVersion) => {
+  const now = new Date().toISOString();
+  try {
+    const raw = localStorage.getItem(META_KEY);
+    let meta = null;
+    try { meta = raw ? JSON.parse(raw) : null; } catch (e) { meta = null; }
+
+    const hadOldData = [STATS_KEY, BOOKMARKS_KEY, WRONG_KEY].some(
+      (key) => localStorage.getItem(key) !== null
+    );
+    const previousVersion = meta?.appVersion || (hadOldData ? '1.0.0' : null);
+    const isUpgrade = !!previousVersion && previousVersion !== currentVersion;
+    const isFreshInstall = !meta && !hadOldData;
+
+    const nextMeta = {
+      schemaVersion: APP_SCHEMA_VERSION,
+      appVersion: currentVersion,
+      previousVersion: meta?.appVersion || null,
+      firstInstalledAt: meta?.firstInstalledAt || now,
+      upgradedAt: isUpgrade ? now : (meta?.upgradedAt || null)
+    };
+    localStorage.setItem(META_KEY, JSON.stringify(nextMeta));
+
+    return {
+      isUpgrade,
+      isFreshInstall,
+      previousVersion,
+      currentVersion,
+      dataPreserved: true
+    };
+  } catch (e) {
+    console.error('Error running app migration', e);
+    return {
+      isUpgrade: false,
+      isFreshInstall: false,
+      previousVersion: null,
+      currentVersion,
+      dataPreserved: true
+    };
+  }
+};
+
+export const loadAppMeta = () => {
+  try {
+    const raw = localStorage.getItem(META_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    return null;
   }
 };

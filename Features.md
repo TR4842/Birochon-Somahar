@@ -14,9 +14,9 @@
 | **প্ল্যাটফর্ম** | Android (Capacitor দিয়ে React ওয়েব অ্যাপ → নেটিভ APK) |
 | **অফলাইন** | ✅ সম্পূর্ণ — কোনো API/network call নেই |
 | **Package** | `com.tr4842.birochonsomahar` |
-| **Version** | 1.0.0 |
+| **Version** | 1.1.0 (versionCode 2, upgradable) |
 | **Stack** | React 18 + Vite 5 + Tailwind 3 + Capacitor 6 + Lucide Icons |
-| **কোডবেস সাইজ** | ২,৬১৬+ লাইন (১৩টি সোর্স ফাইল) |
+| **কোডবেস সাইজ** | ২০+ সোর্স ফাইল + ৩৭টি টেস্ট |
 | **ডেটাবেস সাইজ** | ৩,৭৬৫+ ভোকাবুলারি আইটেম (৫টি ক্যাটাগরি) |
 
 ---
@@ -54,9 +54,13 @@
 │  ├── data/                                               │
 │  │   └── birochon_data.json   ← 3,765 items (generated) │
 │  ├── utils/                                             │
-│  │   ├── quizGenerator.js ← MCQ generator              │
-│  │   ├── storage.js       ← localStorage helpers        │
-│  │   └── tts.js           ← Text-to-Speech              │
+│  │   ├── quizGenerator.js   ← MCQ generator            │
+│  │   ├── storage.js         ← localStorage + settings   │
+│  │   ├── readingProgress.js ← per-category resume/tick  │
+│  │   ├── appVersion.js      ← version.json → app        │
+│  │   ├── updater.js         ← GitHub Releases API       │
+│  │   ├── backup.js          ← export / import all data  │
+│  │   └── tts.js             ← Text-to-Speech            │
 │  └── components/                                        │
 │      ├── Header.jsx        ← Top sticky header          │
 │      ├── Navbar.jsx        ← Bottom 5-tab nav           │
@@ -65,7 +69,10 @@
 │      ├── ItemCard.jsx      ← Single word card           │
 │      ├── QuizView.jsx      ← Quiz (setup/active/result) │
 │      ├── BookmarksView.jsx ← Saved words                │
-│      └── AboutView.jsx     ← Creator info               │
+│      ├── AboutView.jsx     ← Creator + update + backup  │
+│      ├── ReadingProgressCard.jsx ← Home resume card     │
+│      ├── UpdateCard.jsx    ← GitHub Release updater     │
+│      └── BackupCard.jsx    ← Backup / restore UI        │
 └─────────────────────────────────────────────────────────┘
         ↕ bundled with Vite → dist/
         ↕ synced via Capacitor → android/ → APK
@@ -93,7 +100,18 @@
 - **চিহ্নিত শব্দসমূহ টগল**: শুধু বুকমার্ক করা শব্দ দেখানো
 - **র‍্যান্ডম (Shuffle)**: তালিকা এলোমেলোভাবে সাজানো
 - **পেজিনেশন**: প্রতি পেজে ৩০টি আইটেম
+- **🆕 পড়ার অগ্রগতি (প্রতিটি ক্যাটাগরির জন্য সম্পূর্ণ আলাদা)**:
+  - শেষ ক্যাটাগরি, পৃষ্ঠা, সার্চ/বর্ণ/বুকমার্ক/র‍্যান্ডম ফিল্টার, স্ক্রল পজিশন ও শেষ দেখা কার্ড সংরক্ষিত
+  - নতুন সেশনে / ট্যাবে ফিরলে **স্বয়ংক্রিয় resume** + "কোথা থেকে চালিয়ে যাচ্ছেন" ব্যানার
+  - **✓ "এখান পর্যন্ত পড়েছি"** টিক — এর আগের সব শব্দ পড়া (সবুজ কার্ড) → পরের সেশন প্রথম অপঠিত শব্দ থেকে শুরু
+  - **"এই পাতা পর্যন্ত পড়েছি"** এক-ট্যাপ বাল্ক টিক; আগের কার্ডে চাপলে চিহ্ন পিছিয়ে আসে; "চিহ্ন মুছুন" দিয়ে রিসেট
+  - **প্রতিটি সেকশনে "চালিয়ে যান" বাটন** (পড়ার অগ্রগতি কার্ড, হোম পেজের প্রতিটি বিষয়, রিজিউম ব্যানার) → চিহ্নের ঠিক পরের অপঠিত শব্দে সঠিক পৃষ্ঠায় নিয়ে যায়
+  - টিক-চিহ্ন **authoritative**: স্ক্রল ট্র্যাকিং আর resume অ্যাঙ্কর পেছনে ঠেলে দিতে পারে না; সব জায়গায় একক `getContinuePoint()` ব্যবহৃত
+  - progress bar (`পড়া / মোট / %`), হোম পেজে ৫টি বিষয়ের শর্টকাট কার্ড
+  - `অটো-রিজিউম` ও `অটো-টিক` টগল; seeded shuffle ফলে র‍্যান্ডম ক্রম সেশনের পরেও স্থিতিশীল
+  - আইডি + ইনডেক্স উভয় সংরক্ষিত — ভবিষ্যতে ডেটাবেসে নতুন শব্দ ঢুকলেও চিহ্ন সরে না
 - **ItemCard-এ প্রতি কার্ডে**:
+  - "পড়া" / "এখান থেকে" ব্যাজ, টিক-চিহ্ন বাটন, resume হাইলাইট
   - স্পিকার বাটন — বাংলা/ইংরেজি TTS উচ্চারণ
   - কপি বাটন — "শব্দ - অর্থ" ফরম্যাটে ক্লিপবোর্ডে কপি
   - স্টার বাটন — বুকমার্ক যোগ/বাদ
@@ -148,15 +166,20 @@
 
 ## 🔄 অফলাইন পার্সিস্টেন্স (localStorage)
 
-তিনটি আলাদা key-তে সব ডেটা সংরক্ষিত:
+ছয়টি আলাদা key-তে সব ডেটা সংরক্ষিত (প্রথম তিনটি v1.0 থেকে অপরিবর্তিত):
 
 | Key | ডেটা | উদ্দেশ্য |
 |---|---|---|
 | `birochon_quiz_stats_v1` | totalQuizzes, totalRight/Wrong, streak, per-category stats, last 50 history | পরিসংখ্যান পেজ |
 | `birochon_bookmarks_v1` | `[itemId, ...]` | স্টার মার্ক করা শব্দ |
 | `birochon_wrong_v1` | `[{itemId, term, examSynonyms, extraSynonyms, meaning, correctAnswer, prompt, addedAt, lastWrongAt}, ...]` | ভুল উত্তর থেকে পরীক্ষা |
+| `birochon_reading_progress_v1` | `{schemaVersion, lastCategoryId, categories: {catId: {resumeId, resumeIndex, readThroughId, readThroughIndex, page, scrollY, filters, updatedAt}}}` | প্রতি-ক্যাটাগরি resume + টিক-চিহ্ন |
+| `birochon_settings_v1` | `{autoResume, autoMarkRead, autoCheckUpdates, lastUpdateCheckAt, dismissedUpdateTag}` | ব্যবহারকারীর পছন্দ |
+| `birochon_app_meta_v1` | `{schemaVersion, appVersion, previousVersion, upgradedAt}` | non-destructive আপগ্রেড রেকর্ড |
 
 **De-duplication by `itemId`** — একই প্রশ্ন বারবার ভুল হলেও একবারই সেভ।
+
+**Upgrade safety** — প্রথম তিনটি key v1.0 থেকে অক্ষরশঃ অপরিবর্তিত; নতুন ফিচার শুধু নতুন key যোগ করে। সব reader ভাঙা/পুরনো JSON normalize করে, তাই পুরনো ইনস্টলেশন v1.1+ এ আপগ্রেড হলে কোনো ডেটা মুছে যায় না।
 
 ---
 
@@ -199,6 +222,21 @@
 - বাংলা ফন্ট: Hind Siliguri + Noto Serif Bengali
 - ছোঁয়া-বান্ধব মোবাইল UI (no-zoom, no-tap-highlight)
 
+### ৮. পড়ার অগ্রগতি ও টিক-চিহ্ন (v1.1.0)
+- পাঁচটি ক্যাটাগরির **স্বাধীন** state — একটির চিহ্ন অন্যটিকে ছোঁয় না
+- সেশনের শেষ অবস্থান (scroll + page + filters) স্বয়ংক্রিয়ভাবে মনে রাখা
+- টিক-চিহ্ন → "এর আগের সব পড়া" → পরের সেশন প্রথম অপঠিত আইটেম থেকে শুরু
+- ডেটাবেস আপডেট-সহনশীল: আইডি-ভিত্তিক resolve, legacy/corrupt ডেটা normalize
+- সম্পূর্ণ অফলাইন — কোনো সার্ভার নেই
+
+### ৯. GitHub Release আপডেট + ইন-প্লেস আপগ্রেড (v1.1.0)
+- **ঐচ্ছিক** "আপডেট আছে কি দেখুন" → public GitHub Releases API → ভার্সন/চেঞ্জলগ/APK লিংক
+- পুরনো non-versioned ট্যাগ (`Final-release`) উপেক্ষা করে সর্বোচ্চ semver ট্যাগ বেছে নেয়; APK নাম থেকেও ভার্সন পড়তে পারে
+- `autoCheckUpdates` চালু হলে ১২ ঘণ্টায় একবার, অনলাইনে; নাহলে শূন্য network call
+- `version.json` → npm/Vite/Gradle/Release একক উৎস; debug + release দুটোই একই stable keystore-এ স্বাক্ষরিত
+- `EXPECTED_SIGNATURE_SHA256` দিয়ে CI-তে স্বাক্ষর enforce; একবারের স্বাক্ষর-পরিবর্তনের জন্য ব্যাকআপ/রিস্টোর + Android Auto Backup
+- Release asset: APK + `update.json` + `SHA256SUMS.txt` + চেঞ্জলগ
+
 ---
 
 ## 🛠️ ডেভেলপমেন্ট ও CI/CD
@@ -211,22 +249,30 @@
 | Mobile | Capacitor 6 (Android) |
 | Data | Python 3.11 + `openpyxl`-less zipfile XML parsing |
 | Fonts | Google Fonts (Hind Siliguri, Noto Serif Bengali) |
-| Storage | Browser `localStorage` |
+| Storage | Browser `localStorage` (version-tolerant readers) |
+| Updates | Public GitHub Releases API (opt-in only) |
 
 ### NPM Scripts
 ```bash
-npm run dev         # Vite dev server (port 5173)
-npm run build       # python3 parse_excel.py && vite build  (full prod build)
-npm run preview     # vite preview
-npm run cap:build   # npm run build && npx cap sync
+npm run dev            # Vite dev server (port 5173)
+npm run version:check  # version.json ↔ package.json ↔ Vite ↔ Gradle ↔ RELEASE_NOTES.md
+npm test               # node:test (37 tests) + SSR + jsdom DOM regression
+npm run build          # version check → parse_excel.py → vite build
+npm run preview        # vite preview
+npm run cap:build      # npm run build && npx cap sync
 ```
 
 ### GitHub Actions
-- **`.github/workflows/build.yaml`** — push to main/master/arena/*-এ **autobuild Android APK**
+- **`.github/workflows/main.yml`** — push to main/master/arena/*-এ **autobuild signed APK**
   - Python 3.11 + Node 20 + Java 17 (Zulu)
-  - `npm ci` → `parse_excel.py` → `vite build` → `npx cap sync android` → `gradlew assembleDebug`
-  - **Artifact**: `Birochon-Somahar-v1.0.apk` (debug)
-- একই ফাইলের মূল `build.yaml`-এ workflow-এর declarative কনফিগারেশন
+  - `npm ci` → `version:check` → `npm test` → `parse_excel.py` → `vite build` → `cap sync` → `gradlew assembleDebug`
+  - `ANDROID_KEYSTORE_BASE64` থেকে স্থায়ী key restore; `verify_apk_signature.sh` দিয়ে স্বাক্ষর যাচাই
+  - **Artifact**: `Birochon-Somahar-v${version}.apk`
+- **`.github/workflows/release.yml`** — **GitHub Release-এ আপডেট প্রকাশের অপশন**
+  - Trigger: `v*` ট্যাগ push **অথবা** Actions → Run workflow (`publish_release`, `prerelease`, `version`, `tag` ইনপুট)
+  - signed `assembleRelease` (key না থাকলে debug fallback), `update.json` + `SHA256SUMS.txt` + চেঞ্জলগ তৈরি
+  - `gh release create/upload` → APK, manifest, checksum; artifact-ও আপলোড হয়
+- `.githuv/workflows/build.yaml` ও মূল `build.yaml` — একই build কনফিগারেশনের সিঙ্ক করা কপি
 
 ---
 
@@ -235,8 +281,8 @@ npm run cap:build   # npm run build && npx cap sync
 | অ্যাসেট | সাইজ | Gzipped |
 |---|---|---|
 | `index.html` | 0.97 kB | 0.62 kB |
-| CSS | 28.31 kB | 5.37 kB |
-| JS | 652.67 kB | 156.08 kB |
+| CSS | 31.53 kB | 5.78 kB |
+| JS | 694.59 kB | 169.42 kB |
 | **profile.png** | 2.3 MB | — |
 | JSON ডেটা | ~444 kB | (loaded once) |
 
@@ -247,9 +293,9 @@ npm run cap:build   # npm run build && npx cap sync
 ## 🔐 পারমিশন ও সিকিউরিটি
 
 `AndroidManifest.xml`-এ শুধু ১টি permission:
-- `INTERNET` — Capacitor WebView-এর জন্য (অ্যাপ নিজে কোনো network call করে না)
+- `INTERNET` — Capacitor WebView + **ঐচ্ছিক** GitHub Release আপডেট চেক (ব্যবহারকারী না চাইলে কোনো call নেই)
 
-সব ডেটা ফোনেই থাকে — কোনো server, কোনো tracking।
+`android:fullBackupContent` / `android:dataExtractionRules` দিয়ে WebView localStorage (`app_webview`) Android Auto Backup-এ অন্তর্ভুক্ত। সব ডেটা ফোনেই থাকে — কোনো tracking, কোনো নিজস্ব server নেই। Keystore কখনোই রিপোজিটরিতে আসে না (`.gitignore`)।
 
 ---
 
@@ -277,6 +323,12 @@ npm run cap:build   # npm run build && npx cap sync
 | বাংলা UI/UX (সম্পূর্ণ) | ✅ |
 | ইংরেজি ফন্ট (পারিভাষিক) | ✅ |
 | Responsive Mobile-first | ✅ |
+| পড়ার অগ্রগতি (প্রতি-ক্যাটাগরি) | ✅ |
+| সেশন auto-resume + টিক-চিহ্ন | ✅ |
+| প্রতি-সেকশনে "চালিয়ে যান" বাটন | ✅ |
+| GitHub Release আপডেট চেক | ✅ |
+| একই স্বাক্ষরে in-place আপগ্রেড | ✅ |
+| ডেটা ব্যাকআপ / রিস্টোর | ✅ |
 | Dark mode | ❌ (planned) |
 | Cloud sync | ❌ (planned) |
 | Multiplayer quiz | ❌ (planned) |

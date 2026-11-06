@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Volume2, Star, Copy, Check, Zap } from 'lucide-react';
-import { speakText } from '../utils/tts';
+import { Volume2, Star, Copy, Check, Zap, CheckCheck, MapPin } from 'lucide-react';
+import { speakText } from '../utils/tts.js';
 
 // Small helper: turn "a, b, c, d" -> ["a", "b", "c", "d"], trimming dots/space.
 const splitSynonyms = (raw) => {
@@ -11,7 +11,16 @@ const splitSynonyms = (raw) => {
     .filter(Boolean);
 };
 
-export default function ItemCard({ item, isBookmarked, onToggleBookmark, onPracticeItem }) {
+export default function ItemCard({
+  item,
+  isBookmarked,
+  onToggleBookmark,
+  onPracticeItem,
+  isRead = false,
+  isMarkedHere = false,
+  isResumePoint = false,
+  onMarkReadUpTo
+}) {
   const [copied, setCopied] = useState(false);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
 
@@ -49,15 +58,29 @@ export default function ItemCard({ item, isBookmarked, onToggleBookmark, onPract
   };
 
   return (
-    <div className="bg-cream-100 p-4 rounded-2xl border border-peach-200 shadow-retro-sm hover:shadow-retro hover:border-peach-300 transition-all duration-200 group relative flex flex-col justify-between">
+    <div className={`p-4 rounded-2xl border shadow-retro-sm hover:shadow-retro transition-all duration-200 group relative flex flex-col justify-between h-full ${
+      isRead ? 'bg-mint-50/60 border-mint-300' : 'bg-cream-100 border-peach-200 hover:border-peach-300'
+    } ${isResumePoint ? 'ring-2 ring-peach-400 border-peach-400' : ''}`}>
 
       {/* Top Action Buttons */}
       <div className="flex items-center justify-between gap-2 mb-2">
-        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-peach-100 text-warmcharcoal-300 border border-peach-200">
-          {item.categoryName}
-        </span>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-peach-100 text-warmcharcoal-300 border border-peach-200">
+            {item.categoryName}
+          </span>
+          {isRead && (
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-mint-200 text-mint-500 border border-mint-300 flex items-center gap-1">
+              <Check className="w-3 h-3" /> পড়া
+            </span>
+          )}
+          {isResumePoint && (
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-peach-300 text-white border border-peach-400 flex items-center gap-1">
+              <MapPin className="w-3 h-3" /> এখান থেকে
+            </span>
+          )}
+        </div>
 
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 flex-shrink-0">
           {/* Speaker Button */}
           <button
             onClick={handleSpeak}
@@ -127,16 +150,32 @@ export default function ItemCard({ item, isBookmarked, onToggleBookmark, onPract
         )}
       </div>
 
-      {/* Footer / Practice button */}
-      {onPracticeItem && (
-        <div className="mt-3 pt-2 border-t border-cream-300 flex justify-end">
-          <button
-            onClick={() => onPracticeItem(item)}
-            className="text-[11px] font-bold text-peach-500 hover:text-peach-600 flex items-center gap-1 py-1 px-2.5 rounded-lg hover:bg-peach-100 transition-colors"
-          >
-            <Zap className="w-3 h-3 fill-current" />
-            অনুশীলন করুন
-          </button>
+      {/* Footer: "read up to here" tick + practice button */}
+      {(onMarkReadUpTo || onPracticeItem) && (
+        <div className={`mt-3 pt-2 border-t border-cream-300 flex items-center gap-2 ${onMarkReadUpTo ? 'justify-between' : 'justify-end'}`}>
+          {onMarkReadUpTo && (
+            <button
+              onClick={() => onMarkReadUpTo(item)}
+              title="এই শব্দসহ এর আগের সব শব্দ পড়া হিসেবে চিহ্নিত করুন; পরের সেশন এর পর থেকে শুরু হবে"
+              className={`text-[11px] font-bold flex items-center gap-1 py-1 px-2 rounded-lg transition-colors ${
+                isMarkedHere
+                  ? 'bg-mint-300 text-warmcharcoal-400 hover:bg-mint-400'
+                  : 'text-mint-500 hover:bg-mint-100'
+              }`}
+            >
+              <CheckCheck className="w-3.5 h-3.5" />
+              {isMarkedHere ? 'শেষ চিহ্ন ✓' : 'এখান পর্যন্ত পড়েছি'}
+            </button>
+          )}
+          {onPracticeItem && (
+            <button
+              onClick={() => onPracticeItem(item)}
+              className="text-[11px] font-bold text-peach-500 hover:text-peach-600 flex items-center gap-1 py-1 px-2.5 rounded-lg hover:bg-peach-100 transition-colors"
+            >
+              <Zap className="w-3 h-3 fill-current" />
+              অনুশীলন করুন
+            </button>
+          )}
         </div>
       )}
 

@@ -6,20 +6,27 @@ on:
     paths:
       - '**.xlsx'
       - 'scripts/**'
+      - 'tests/**'
       - 'src/**'
       - 'public/**'
       - 'android/**'
       - 'package.json'
+      - 'package-lock.json'
       - 'vite.config.js'
-      - '.github/workflows/build.yaml'
+      - 'version.json'
+      - 'RELEASE_NOTES.md'
+      - '.github/workflows/**'
       - 'build.yaml'
   pull_request:
     branches: [ "main", "master" ]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build-apk:
-    name: Auto Compile APK
+    name: Build stable-signed APK
     runs-on: ubuntu-latest
 
     steps:
@@ -44,28 +51,63 @@ jobs:
           java-version: '17'
 
       - name: Install dependencies
-        run: npm ci || npm install
+        run: npm ci
+
+      - name: Verify version metadata is in sync
+        run: npm run version:check
+
+      - name: Run unit tests
+        run: npm test
 
       - name: Parse Excel Datasheets & Generate Database
         run: python3 scripts/parse_excel.py
 
       - name: Build Web Application
-        run: npm run build
+        run: npx vite build
 
       - name: Sync Capacitor Android Project
         run: npx cap sync android
+
+      # One stable keystore for ALL builds (debug + release). Without it each
+      # runner uses a fresh debug key and no APK can be upgraded in place.
+      - name: Restore stable signing key
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/birochon-release.jks
+            echo "✅ Stable signing key restored."
+          else
+            echo "::warning::ANDROID_KEYSTORE_BASE64 is not set — this APK uses an ephemeral debug key and will NOT be upgradable in place. See README → আপগ্রেড ও স্বাক্ষর."
+          fi
 
       - name: Grant Gradle execute permission
         run: chmod +x android/gradlew
 
       - name: Build Android APK
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           cd android
           ./gradlew assembleDebug --stacktrace
 
+      - name: Verify APK signing certificate
+        env:
+          EXPECTED_SIGNATURE_SHA256: ${{ secrets.EXPECTED_SIGNATURE_SHA256 }}
+        run: bash scripts/verify_apk_signature.sh android/app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Prepare versioned APK artifact
+        id: meta
+        run: |
+          VERSION=$(node -p "require('./version.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          cp android/app/build/outputs/apk/debug/app-debug.apk "Birochon-Somahar-v${VERSION}.apk"
+
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Birochon-Somahar-v1.0.apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: Birochon-Somahar-v${{ steps.meta.outputs.version }}.apk
+          path: Birochon-Somahar-v${{ steps.meta.outputs.version }}.apk
           if-no-files-found: error
