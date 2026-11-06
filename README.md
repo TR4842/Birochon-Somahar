@@ -97,6 +97,8 @@ npm run cap:build    # build + cap sync (then gradlew assembleDebug / assembleRe
 
 `update.json` ফরম্যাট: `{ version, versionCode, tag, package, minSupportedVersion, apk, url, releaseUrl, notes, publishedAt }`।
 
+> ℹ️ GitHub শুধু **default branch**-এ থাকা workflow-কেই Actions ট্যাবে দেখায় — তাই `release.yml` মার্জ/পুশ হওয়ার পর "Run workflow" অপশনটি দেখা যাবে। ট্যাগ-ভিত্তিক প্রকাশ (`git tag vX.Y.Z`) যেকোনো branch থেকেই কাজ করে।
+
 ---
 
 ## 🔐 পুরনো ভার্সনের ওপরে ইনস্টল (upgrade) ও স্বাক্ষর
