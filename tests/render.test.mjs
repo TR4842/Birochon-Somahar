@@ -38,6 +38,8 @@ test('every changed view server-renders without crashing', () => {
   assert.match(html.app, /বিরচন সমাহার/);
   assert.match(html.reading, /পড়ার অগ্রগতি/);
   assert.match(html.reading, /এখান পর্যন্ত পড়েছি/);
+  assert.match(html.reading, /চালিয়ে যান/);
+  assert.match(html.progressCard, /চালিয়ে যান/);
   assert.match(html.updateCard, /আপডেট আছে কি দেখুন/);
   assert.match(html.backupCard, /ব্যাকআপ/);
   assert.match(html.about, /সংস্করণ/);

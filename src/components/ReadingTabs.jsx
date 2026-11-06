@@ -1,14 +1,15 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import {
   Search, Star, BookOpen, Shuffle, X, ChevronLeft, ChevronRight,
-  CheckCheck, RotateCcw, MapPin, Settings2, Check
+  CheckCheck, RotateCcw, MapPin, Settings2, Check, Play
 } from 'lucide-react';
 import ItemCard from './ItemCard.jsx';
 import {
   CATEGORY_IDS, DEFAULT_VIEW,
   loadReadingProgress, getCategoryProgress, updateCategoryProgress,
   setLastCategory, markReadUpTo, resetCategoryProgress,
-  resolveCategoryProgress, seededShuffle, makeShuffleSeed, computeResumePage
+  resolveCategoryProgress, getContinuePoint, seededShuffle, makeShuffleSeed,
+  computeResumePage
 } from '../utils/readingProgress.js';
 import { loadSettings, saveSettings } from '../utils/storage.js';
 import { formatBnNumber } from '../utils/appVersion.js';
@@ -31,7 +32,8 @@ export default function ReadingTabs({
   onPracticeItem,
   initialSubTab = 'bagdhara',
   onCategoryChange,
-  onProgressChange
+  onProgressChange,
+  forceContinueOnMount = false
 }) {
   // progressRef is the always-fresh source of truth (scroll updates are written
   // straight to storage without re-rendering the whole list). `progress` state
@@ -56,6 +58,9 @@ export default function ReadingTabs({
   const mountedRef = useRef(true);
   const timersRef = useRef([]);
   const ctxRef = useRef({});
+  // Always points at the newest jump implementation, so effects never capture
+  // a stale `filteredItems` / `view` closure.
+  const jumpToPointRef = useRef(null);
 
   const subTabs = [
     { id: 'bagdhara', name: 'বাগধারা', count: databaseData.categories.bagdhara.count, color: 'peach' },
@@ -166,6 +171,77 @@ export default function ReadingTabs({
     timersRef.current.push(timer);
   }, []);
 
+  /**
+   * Move the view to `point` (the first unread item). The explicit
+   * "চালিয়ে যান" button clears filters so the canonical list is guaranteed;
+   * the automatic session resume keeps saved filters when the target is there.
+   * The scroll is retried because the target page renders one tick later.
+   */
+  const jumpToPoint = (point, { resetFilters = false, noticeText = null } = {}) => {
+    if (!point?.id) return false;
+
+    const inFiltered = filteredItems.some((item) => item.id === point.id);
+    const clearFilters = resetFilters || !inFiltered;
+    let nextView;
+    let page;
+
+    if (clearFilters) {
+      const maxPage = Math.max(1, Math.ceil(baseItems.length / ITEMS_PER_PAGE));
+      page = Math.min(maxPage, Math.floor(point.index / ITEMS_PER_PAGE) + 1);
+      nextView = { ...DEFAULT_VIEW, currentPage: page };
+    } else {
+      page = computeResumePage(
+        filteredItems,
+        { resumeId: point.id, resumeIndex: point.index, page: viewRef.current.currentPage },
+        indexById,
+        ITEMS_PER_PAGE
+      );
+      nextView = { ...viewRef.current, currentPage: page };
+    }
+
+    viewRef.current = nextView;
+    setView(nextView);
+
+    const saved = updateCategoryProgress(progressRef.current, subTabRef.current, {
+      filters: {
+        searchQuery: nextView.searchQuery,
+        letterFilter: nextView.letterFilter,
+        onlyBookmarks: nextView.onlyBookmarks,
+        isShuffle: nextView.isShuffle,
+        shuffleSeed: nextView.shuffleSeed
+      },
+      page,
+      resumeId: point.id,
+      resumeIndex: point.index
+    });
+    commitProgress(saved, true);
+
+    const text = noticeText || (point.hasMark
+      ? `${formatBnNumber(point.readCount)} নম্বর পর্যন্ত পড়া হয়েছে — ${formatBnNumber(point.index + 1)} নম্বর থেকে চালিয়ে যাওয়া হচ্ছে।`
+      : `গতবার যেখানে ছেড়েছিলেন সেখান থেকে শুরু করা হচ্ছে (${formatBnNumber(point.index + 1)} নম্বর)।`);
+
+    let attempts = 0;
+    const attemptScroll = () => {
+      if (!mountedRef.current) return;
+      const cards = Array.from(document.querySelectorAll('[data-reading-item]'));
+      const anchor = cards.find((el) => el.getAttribute('data-item-id') === point.id);
+      if (anchor) {
+        const top = anchor.getBoundingClientRect().top + (window.scrollY || 0) - HEADER_OFFSET;
+        window.scrollTo({ top: Math.max(0, top), behavior: 'auto' });
+        setResumeNotice(text);
+        return;
+      }
+      if (attempts++ < 6) {
+        const t = setTimeout(attemptScroll, 120);
+        timersRef.current.push(t);
+      }
+    };
+    const t0 = setTimeout(attemptScroll, 90);
+    timersRef.current.push(t0);
+    return true;
+  };
+  jumpToPointRef.current = jumpToPoint;
+
   const recordPosition = useCallback(() => {
     if (!mountedRef.current) return;
     const ctx = ctxRef.current;
@@ -183,12 +259,21 @@ export default function ReadingTabs({
     }
     if (!best) return;
 
+    const visibleId = best.getAttribute('data-item-id');
+    const visibleIndex = Number(best.getAttribute('data-index')) || 0;
     const patch = {
-      resumeId: best.getAttribute('data-item-id'),
-      resumeIndex: Number(best.getAttribute('data-index')) || 0,
       page: ctx.view.currentPage,
       scrollY: Math.round(window.scrollY || window.pageYOffset || 0)
     };
+
+    // ROOT-CAUSE FIX: the tick mark is authoritative. If the user scrolled back
+    // into already-read content (or the auto-jump scroll event fires), do NOT
+    // replace the "next unread" anchor with that older card.
+    const continuePoint = getContinuePoint(progressRef.current, ctx.subTab, ctx.baseItems);
+    if (!continuePoint.hasMark || visibleIndex >= continuePoint.index) {
+      patch.resumeId = visibleId;
+      patch.resumeIndex = visibleIndex;
+    }
 
     if (ctx.settings.autoMarkRead) {
       let lastRead = -1;
@@ -260,41 +345,19 @@ export default function ReadingTabs({
     const freshSettings = loadSettings();
     settingsRef.current = freshSettings;
     setSettings(freshSettings);
-    if (!freshSettings.autoResume) return;
 
+    // An explicit "চালিয়ে যান" from the home dashboard always jumps, even if
+    // the user turned automatic resume off.
+    if (!forceContinueOnMount && !freshSettings.autoResume) return;
+
+    const point = getContinuePoint(progressRef.current, subTab, baseItems);
     const cp = resolveCategoryProgress(progressRef.current, subTab, baseItems);
-    if (!(cp.resumeId || cp.readThroughIndex >= 0 || cp.scrollY > 0 || cp.page > 1)) return;
+    const hasHistory = cp.readThroughIndex >= 0 || cp.resumeId || cp.scrollY > 0 || cp.page > 1;
+    if (!forceContinueOnMount && !hasHistory) return;
+    if (!point.id) return;
 
-    const targetPage = computeResumePage(filteredItems, cp, indexById, ITEMS_PER_PAGE);
-    if (targetPage !== viewRef.current.currentPage) {
-      const nextView = { ...viewRef.current, currentPage: targetPage };
-      viewRef.current = nextView;
-      setView(nextView);
-      commitProgress(updateCategoryProgress(progressRef.current, subTab, { page: targetPage }));
-    }
-
-    const anchorId = cp.resumeId;
-    const timer = setTimeout(() => {
-      if (!mountedRef.current) return;
-      const cards = Array.from(document.querySelectorAll('[data-reading-item]'));
-      const anchor = anchorId
-        ? cards.find((el) => el.getAttribute('data-item-id') === anchorId)
-        : null;
-      if (anchor) {
-        const top = anchor.getBoundingClientRect().top + window.scrollY - HEADER_OFFSET;
-        window.scrollTo({ top: Math.max(0, top), behavior: 'auto' });
-      } else if (cp.scrollY > 0) {
-        window.scrollTo({ top: cp.scrollY, behavior: 'auto' });
-      }
-      const where = cp.resumeIndex + 1;
-      setResumeNotice(
-        cp.readThroughIndex >= 0
-          ? `গতবার ${formatBnNumber(cp.readThroughIndex + 1)} নম্বর পর্যন্ত পড়েছিলেন — ${formatBnNumber(where)} নম্বর থেকে চালিয়ে যাওয়া হচ্ছে।`
-          : `গতবার যেখানে ছেড়েছিলেন, সেখান থেকেই শুরু করা হচ্ছে (${formatBnNumber(where)} নম্বর)।`
-      );
-    }, 280);
-    timersRef.current.push(timer);
-  }, [subTab, baseItems, filteredItems, indexById, commitProgress]);
+    jumpToPointRef.current?.(point, { resetFilters: false });
+  }, [subTab, baseItems, filteredItems, indexById, forceContinueOnMount]);
 
   // -------------------------------------------------------------------------
   // Handlers
@@ -342,6 +405,26 @@ export default function ReadingTabs({
       if (i >= lastIndex) { last = item; lastIndex = i; }
     });
     handleMarkReadUpTo(last);
+  };
+
+  /** Explicit "চালিয়ে যান" — ALWAYS goes to the first item AFTER the mark. */
+  const handleContinue = () => {
+    const point = getContinuePoint(progressRef.current, subTabRef.current, baseItems);
+    if (!point.id) {
+      showToast('এই বিষয়ে দেখানোর মতো কোনো শব্দ নেই।');
+      return;
+    }
+    setResumeNotice(null);
+    // Keep the user's filters when the target is visible in them; otherwise
+    // jumpToPoint clears them automatically so the target is guaranteed.
+    jumpToPointRef.current?.(point, {
+      resetFilters: false,
+      noticeText: point.isComplete
+        ? 'এই বিষয়ের সব শব্দ পড়া হয়েছে — শেষ আইটেমে নিয়ে যাওয়া হয়েছে। নতুন করে শুরু করতে "চিহ্ন মুছুন" চাপুন।'
+        : point.hasMark
+          ? `${formatBnNumber(point.readCount)} নম্বর পর্যন্ত পড়া হয়েছে — ${formatBnNumber(point.index + 1)} নম্বর (প্রথম অপঠিত শব্দ) থেকে চালিয়ে যান।`
+          : `গতবার যেখানে ছিলেন সেখান থেকেই চালিয়ে যান (${formatBnNumber(point.index + 1)} নম্বর)।`
+    });
   };
 
   const handleResetProgress = () => {
@@ -406,6 +489,13 @@ export default function ReadingTabs({
             <span>{resumeNotice}</span>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={handleContinue}
+              className="flex items-center gap-1 px-3 py-1.5 text-[11px] font-bold rounded-lg bg-peach-400 text-white hover:bg-peach-500 shadow-retro-sm"
+            >
+              <Play className="w-3 h-3 fill-current" />
+              চালিয়ে যান
+            </button>
             <button onClick={goToStart} className="px-3 py-1.5 text-[11px] font-bold rounded-lg bg-cream-100 border border-mint-300 text-warmcharcoal-300 hover:bg-mint-100">
               শুরু থেকে
             </button>
@@ -437,14 +527,28 @@ export default function ReadingTabs({
         </div>
 
         {resolved.isComplete ? (
-          <p className="text-[11px] text-mint-500 font-bold">🎉 এই বিষয়ের সব শব্দ পড়া হয়েছে! আবার শুরু করতে চিহ্ন মুছুন।</p>
+          <p className="text-[11px] text-mint-500 font-bold">🎉 এই বিষয়ের সব শব্দ পড়া হয়েছে! নতুন করে শুরু করতে "চিহ্ন মুছুন" চাপুন।</p>
         ) : (
           <p className="text-[11px] text-warmcharcoal-100">
-            যেকোনো কার্ডের <span className="font-bold text-warmcharcoal-300">✓ এখান পর্যন্ত পড়েছি</span> চাপলে তার আগের সব শব্দ পড়া হয়ে যাবে এবং পরের সেশন ঠিক পরের শব্দ থেকে শুরু হবে।
+            যেকোনো কার্ডের <span className="font-bold text-warmcharcoal-300">✓ এখান পর্যন্ত পড়েছি</span> চাপলে তার আগের সব শব্দ পড়া হয়ে যাবে।{' '}
+            <span className="font-bold text-warmcharcoal-300">চালিয়ে যান</span> বাটন (বা পরের সেশন) স্বয়ংক্রিয়ভাবে{' '}
+            <span className="font-bold text-peach-500">{formatBnNumber(resolved.continueIndex + 1)} নম্বর</span> — প্রথম অপঠিত শব্দ — থেকে শুরু করবে।
           </p>
         )}
 
         <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-cream-200">
+          <button
+            onClick={handleContinue}
+            disabled={!resolved.continueId}
+            className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl bg-peach-400 hover:bg-peach-500 text-white border border-peach-500 shadow-retro-sm transition-all hover:scale-105 disabled:opacity-40"
+            title="যে পর্যন্ত পড়া হয়েছে, তার ঠিক পরের অংশে নিয়ে যান"
+          >
+            <Play className="w-3.5 h-3.5 fill-current" />
+            চালিয়ে যান
+            <span className="text-[10px] font-normal opacity-90">
+              ({formatBnNumber(resolved.continueIndex + 1)} নম্বর থেকে)
+            </span>
+          </button>
           <button
             onClick={handleMarkPageRead}
             disabled={!paginatedItems.length}

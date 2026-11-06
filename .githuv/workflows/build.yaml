@@ -6,6 +6,7 @@ on:
     paths:
       - '**.xlsx'
       - 'scripts/**'
+      - 'tests/**'
       - 'src/**'
       - 'public/**'
       - 'android/**'

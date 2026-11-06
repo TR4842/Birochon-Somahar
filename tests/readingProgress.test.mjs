@@ -121,6 +121,58 @@ test('computeResumePage finds the anchor in a filtered list', () => {
   );
 });
 
+test('BUGFIX: the tick mark wins over a stale last-scrolled position', () => {
+  const marked = rp.markReadUpTo(rp.loadReadingProgress(), 'bagdhara', {
+    itemId: 'bag_4', index: 3, nextId: 'bag_5'
+  });
+  // Simulate what scroll tracking used to do: write an OLDER visible card back
+  // into resumeId/resumeIndex, which previously broke "start after the mark".
+  const clobbered = rp.updateCategoryProgress(marked, 'bagdhara', {
+    resumeId: 'bag_1', resumeIndex: 0, scrollY: 0, page: 1
+  });
+
+  const point = rp.getContinuePoint(clobbered, 'bagdhara', items);
+  assert.equal(point.hasMark, true);
+  assert.equal(point.index, 4);
+  assert.equal(point.id, 'bag_5');
+  assert.equal(point.readCount, 4);
+
+  const resolved = rp.resolveCategoryProgress(clobbered, 'bagdhara', items);
+  assert.equal(resolved.continueIndex, 4);
+  assert.equal(resolved.continueId, 'bag_5');
+  assert.equal(resolved.resumeIndex, 0, 'last-viewed position kept, but not used for continuing');
+});
+
+test('without a mark, the continue point is the last viewed item', () => {
+  const state = rp.updateCategoryProgress(rp.loadReadingProgress(), 'bagdhara', {
+    resumeId: 'bag_7', resumeIndex: 6
+  });
+  const point = rp.getContinuePoint(state, 'bagdhara', items);
+  assert.equal(point.hasMark, false);
+  assert.equal(point.index, 6);
+  assert.equal(point.id, 'bag_7');
+});
+
+test('continue point follows the mark ID after a database insert', () => {
+  const state = rp.markReadUpTo(rp.loadReadingProgress(), 'bagdhara', {
+    itemId: 'bag_4', index: 3, nextId: 'bag_5'
+  });
+  const shifted = [{ id: 'bag_new', term: 'নতুন' }, ...items];
+  const point = rp.getContinuePoint(state, 'bagdhara', shifted);
+  assert.equal(point.id, 'bag_5');
+  assert.equal(point.index, 5);
+});
+
+test('a fully read category clamps the continue point to the last item', () => {
+  const state = rp.markReadUpTo(rp.loadReadingProgress(), 'bagdhara', {
+    itemId: 'bag_10', index: 9, nextId: null
+  });
+  const point = rp.getContinuePoint(state, 'bagdhara', items);
+  assert.equal(point.isComplete, true);
+  assert.equal(point.index, 9);
+  assert.equal(point.id, 'bag_10');
+});
+
 test('resetting one category leaves the others intact', () => {
   const a = rp.markReadUpTo(rp.loadReadingProgress(), 'bagdhara', { itemId: 'bag_3', index: 2, nextId: 'bag_4' });
   const b = rp.markReadUpTo(a, 'biporit', { itemId: 'bip_5', index: 4, nextId: 'bip_6' });

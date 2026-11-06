@@ -1,5 +1,5 @@
 import React from 'react';
-import { BookOpenCheck, Play, MapPin } from 'lucide-react';
+import { BookOpenCheck, Play, MapPin, ArrowLeftRight } from 'lucide-react';
 import { CATEGORY_IDS, resolveCategoryProgress } from '../utils/readingProgress.js';
 import { formatBnNumber } from '../utils/appVersion.js';
 
@@ -16,7 +16,7 @@ export default function ReadingProgressCard({ databaseData, readingProgress, onR
     };
   });
   const active = rows.find((r) => r.id === readingProgress.lastCategoryId) || rows[0];
-  const hasAny = rows.some((r) => r.readCount > 0 || r.resumeId || r.scrollY > 0 || r.page > 1);
+  const hasAny = rows.some((r) => r.readCount > 0 || r.continueIndex > 0 || r.resumeId || r.scrollY > 0 || r.page > 1);
   const totalRead = rows.reduce((sum, r) => sum + r.readCount, 0);
 
   return (
@@ -29,7 +29,7 @@ export default function ReadingProgressCard({ databaseData, readingProgress, onR
           </h3>
           <p className="text-xs text-warmcharcoal-200 mt-0.5">
             {hasAny
-              ? `মোট ${formatBnNumber(totalRead)} টি শব্দ পড়া হয়েছে — প্রতিটি বিষয়ের নিজস্ব অবস্থান সংরক্ষিত।`
+              ? `মোট ${formatBnNumber(totalRead)} টি শব্দ পড়া হয়েছে — প্রতিটি বিষয়ের নিজস্ব "চালিয়ে যান" বিন্দু সংরক্ষিত।`
               : 'পড়া শুরু করলে শেষ অবস্থান এখানে স্বয়ংক্রিয়ভাবে মনে রাখা হবে।'}
           </p>
         </div>
@@ -38,34 +38,48 @@ export default function ReadingProgressCard({ databaseData, readingProgress, onR
           className="flex items-center gap-1.5 px-4 py-2.5 bg-mint-400 hover:bg-mint-500 text-white font-bold text-xs rounded-xl shadow-retro-sm transition-all hover:scale-105"
         >
           <Play className="w-3.5 h-3.5 fill-current" />
-          {active.name} — চালিয়ে যান
+          {active.name} — চালিয়ে যান
         </button>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
         {rows.map((row) => (
-          <button
+          <div
             key={row.id}
-            onClick={() => onResumeReading(row.id)}
-            className="text-left bg-cream-50 hover:bg-cream-100 p-3 rounded-xl border border-mint-200 transition-colors group"
-            title={`${row.name}: ${row.resumeIndex + 1} নম্বর থেকে চালিয়ে যান`}
+            className="bg-cream-50 hover:bg-cream-100 p-3 rounded-xl border border-mint-200 transition-colors"
           >
             <div className="flex items-center justify-between gap-2 mb-1.5">
               <span className="text-xs font-bold text-warmcharcoal-300 truncate">{row.name}</span>
               <span className="text-[10px] font-bold text-warmcharcoal-200 flex-shrink-0 flex items-center gap-1">
                 <MapPin className="w-3 h-3 text-peach-500" />
-                {formatBnNumber(Math.min(row.resumeIndex + 1, row.total || 1))} / {formatBnNumber(row.total)}
+                {formatBnNumber(Math.min(row.continueIndex + 1, row.total || 1))} / {formatBnNumber(row.total)}
               </span>
             </div>
             <div className="w-full bg-cream-300 h-1.5 rounded-full overflow-hidden">
               <div className="bg-mint-400 h-full rounded-full" style={{ width: `${row.percent}%` }} />
             </div>
-            <div className="text-[10px] text-warmcharcoal-100 mt-1 group-hover:text-mint-500">
-              {row.readCount > 0
-                ? `${formatBnNumber(row.readCount)} টি পড়া • ${formatBnNumber(row.percent)}% সম্পন্ন`
-                : 'এখনও চিহ্নিত করা হয়নি — এখান থেকে শুরু করুন'}
+            <div className="flex items-center justify-between gap-2 mt-2">
+              <div className="text-[10px] text-warmcharcoal-100 leading-tight">
+                {row.readCount > 0
+                  ? `${formatBnNumber(row.readCount)} টি পড়া • ${formatBnNumber(row.percent)}% · পরবর্তী ${formatBnNumber(row.continueIndex + 1)}`
+                  : `এখনও চিহ্নিত হয়নি · ${formatBnNumber(row.continueIndex + 1)} নম্বর থেকে`}
+              </div>
+              <button
+                onClick={() => onResumeReading(row.id)}
+                className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 bg-peach-300 hover:bg-peach-400 text-white font-bold text-[10px] rounded-lg shadow-retro-sm transition-colors"
+                title={`${row.name}: ${row.continueIndex + 1} নম্বর (পড়া চিহ্নের পরের অংশ) থেকে চালিয়ে যান`}
+              >
+                <Play className="w-3 h-3 fill-current" />
+                চালিয়ে যান
+              </button>
             </div>
-          </button>
+            {row.hasMark && !row.isComplete && (
+              <div className="text-[10px] text-mint-500 font-bold mt-1 flex items-center gap-1">
+                <ArrowLeftRight className="w-3 h-3" />
+                {formatBnNumber(row.readCount)} পর্যন্ত পড়া → {formatBnNumber(row.continueIndex + 1)} থেকে শুরু
+              </div>
+            )}
+          </div>
         ))}
       </div>
     </div>

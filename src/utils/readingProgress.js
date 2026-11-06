@@ -248,16 +248,48 @@ export const resolveCategoryProgress = (state, categoryId, items = []) => {
     : Math.min(total - 1, byIdOrIndex(cp.readThroughId, cp.readThroughIndex, -1));
   const resumeIndex = byIdOrIndex(cp.resumeId, cp.resumeIndex, 0);
   const readCount = readThroughIndex < 0 ? 0 : Math.min(total, readThroughIndex + 1);
+  const hasMark = readThroughIndex >= 0;
+
+  // THE tick mark is authoritative for "where do I continue?". Scroll tracking
+  // may have stored an OLDER last-viewed card (e.g. the user scrolled back to
+  // revise) — that must never drag the continue point back into already-read
+  // content. Without a mark we fall back to the last session position.
+  const maxIndex = Math.max(total - 1, 0);
+  const continueIndex = Math.min(
+    maxIndex,
+    Math.max(0, hasMark ? readThroughIndex + 1 : resumeIndex)
+  );
+  const continueId = items[continueIndex]?.id || null;
 
   return {
     ...cp,
     readThroughIndex,
     resumeIndex,
     readCount,
+    hasMark,
+    continueIndex,
+    continueId,
     total,
     percent: total ? Math.round((readCount / total) * 100) : 0,
     isComplete: total > 0 && readCount >= total,
     indexById
+  };
+};
+
+/**
+ * The one place every "চালিয়ে যান" action asks: which item should reading
+ * continue from? A tick mark always wins over the last scrolled position.
+ */
+export const getContinuePoint = (state, categoryId, items = []) => {
+  const cp = resolveCategoryProgress(state, categoryId, items);
+  return {
+    id: cp.continueId,
+    index: cp.continueIndex,
+    hasMark: cp.hasMark,
+    isComplete: cp.isComplete,
+    readCount: cp.readCount,
+    total: cp.total,
+    readThroughIndex: cp.readThroughIndex
   };
 };
 

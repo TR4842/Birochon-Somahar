@@ -16,7 +16,7 @@
 | **Package** | `com.tr4842.birochonsomahar` |
 | **Version** | 1.1.0 (versionCode 2, upgradable) |
 | **Stack** | React 18 + Vite 5 + Tailwind 3 + Capacitor 6 + Lucide Icons |
-| **কোডবেস সাইজ** | ২০+ সোর্স ফাইল + ৩১টি টেস্ট |
+| **কোডবেস সাইজ** | ২০+ সোর্স ফাইল + ৩৭টি টেস্ট |
 | **ডেটাবেস সাইজ** | ৩,৭৬৫+ ভোকাবুলারি আইটেম (৫টি ক্যাটাগরি) |
 
 ---
@@ -105,6 +105,8 @@
   - নতুন সেশনে / ট্যাবে ফিরলে **স্বয়ংক্রিয় resume** + "কোথা থেকে চালিয়ে যাচ্ছেন" ব্যানার
   - **✓ "এখান পর্যন্ত পড়েছি"** টিক — এর আগের সব শব্দ পড়া (সবুজ কার্ড) → পরের সেশন প্রথম অপঠিত শব্দ থেকে শুরু
   - **"এই পাতা পর্যন্ত পড়েছি"** এক-ট্যাপ বাল্ক টিক; আগের কার্ডে চাপলে চিহ্ন পিছিয়ে আসে; "চিহ্ন মুছুন" দিয়ে রিসেট
+  - **প্রতিটি সেকশনে "চালিয়ে যান" বাটন** (পড়ার অগ্রগতি কার্ড, হোম পেজের প্রতিটি বিষয়, রিজিউম ব্যানার) → চিহ্নের ঠিক পরের অপঠিত শব্দে সঠিক পৃষ্ঠায় নিয়ে যায়
+  - টিক-চিহ্ন **authoritative**: স্ক্রল ট্র্যাকিং আর resume অ্যাঙ্কর পেছনে ঠেলে দিতে পারে না; সব জায়গায় একক `getContinuePoint()` ব্যবহৃত
   - progress bar (`পড়া / মোট / %`), হোম পেজে ৫টি বিষয়ের শর্টকাট কার্ড
   - `অটো-রিজিউম` ও `অটো-টিক` টগল; seeded shuffle ফলে র‍্যান্ডম ক্রম সেশনের পরেও স্থিতিশীল
   - আইডি + ইনডেক্স উভয় সংরক্ষিত — ভবিষ্যতে ডেটাবেসে নতুন শব্দ ঢুকলেও চিহ্ন সরে না
@@ -254,7 +256,7 @@
 ```bash
 npm run dev            # Vite dev server (port 5173)
 npm run version:check  # version.json ↔ package.json ↔ Vite ↔ Gradle ↔ RELEASE_NOTES.md
-npm test               # node:test (31 tests) + SSR render smoke test
+npm test               # node:test (37 tests) + SSR + jsdom DOM regression
 npm run build          # version check → parse_excel.py → vite build
 npm run preview        # vite preview
 npm run cap:build      # npm run build && npx cap sync
@@ -323,6 +325,7 @@ npm run cap:build      # npm run build && npx cap sync
 | Responsive Mobile-first | ✅ |
 | পড়ার অগ্রগতি (প্রতি-ক্যাটাগরি) | ✅ |
 | সেশন auto-resume + টিক-চিহ্ন | ✅ |
+| প্রতি-সেকশনে "চালিয়ে যান" বাটন | ✅ |
 | GitHub Release আপডেট চেক | ✅ |
 | একই স্বাক্ষরে in-place আপগ্রেড | ✅ |
 | ডেটা ব্যাকআপ / রিস্টোর | ✅ |

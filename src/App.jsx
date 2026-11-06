@@ -30,6 +30,7 @@ export default function App() {
   const [readingProgress, setReadingProgress] = useState(() => loadReadingProgress());
   const [readingCategory, setReadingCategory] = useState(() => loadReadingProgress().lastCategoryId || 'bagdhara');
   const [readingSession, setReadingSession] = useState(0);
+  const [forceContinue, setForceContinue] = useState(false);
   const [updateInfo, setUpdateInfo] = useState(null);
   const [upgradeNotice, setUpgradeNotice] = useState(null);
 
@@ -94,8 +95,19 @@ export default function App() {
   const handleResumeReading = (categoryId) => {
     const target = CATEGORY_IDS.includes(categoryId) ? categoryId : readingCategory;
     setReadingCategory(target);
-    setReadingSession((n) => n + 1); // remount → perform the auto-resume jump
+    setReadingSession((n) => n + 1); // remount → perform the jump
+    // This is an explicit "চালিয়ে যান" request: jump even when auto-resume is
+    // switched off, and clear any saved filters so the target is guaranteed.
+    setForceContinue(true);
     setActiveTab('reading');
+  };
+
+  const navigateTo = (tab) => {
+    // Only the explicit "চালিয়ে যান" shortcut forces a jump; any ordinary
+    // navigation clears the flag so a later visit honours the user's setting.
+    setForceContinue(false);
+    if (tab !== 'quiz') setPracticeItem(null);
+    setActiveTab(tab);
   };
 
   const handleUpdateChecked = (info) => setUpdateInfo(info);
@@ -115,7 +127,7 @@ export default function App() {
       <Header
         stats={stats}
         activeTab={activeTab}
-        setActiveTab={setActiveTab}
+        setActiveTab={navigateTo}
         onResetStats={handleResetStats}
       />
 
@@ -125,9 +137,9 @@ export default function App() {
           <StatsLanding
             stats={stats}
             databaseInfo={birochonData}
-            onStartQuiz={() => setActiveTab('quiz')}
+            onStartQuiz={() => navigateTo('quiz')}
             onResetStats={handleResetStats}
-            setActiveTab={setActiveTab}
+            setActiveTab={navigateTo}
             readingProgress={readingProgress}
             onResumeReading={handleResumeReading}
           />
@@ -143,6 +155,7 @@ export default function App() {
             initialSubTab={readingCategory}
             onCategoryChange={setReadingCategory}
             onProgressChange={setReadingProgress}
+            forceContinueOnMount={forceContinue}
           />
         )}
 
@@ -150,10 +163,7 @@ export default function App() {
           <QuizView
             databaseData={birochonData}
             onQuizComplete={handleQuizComplete}
-            onReturnHome={() => {
-              setPracticeItem(null);
-              setActiveTab('stats');
-            }}
+            onReturnHome={() => navigateTo('stats')}
             initialItemToPractice={practiceItem}
           />
         )}
@@ -178,10 +188,7 @@ export default function App() {
       {/* Navigation Bar */}
       <Navbar
         activeTab={activeTab}
-        setActiveTab={(tab) => {
-          if (tab !== 'quiz') setPracticeItem(null);
-          setActiveTab(tab);
-        }}
+        setActiveTab={navigateTo}
         bookmarkCount={bookmarks.length}
         updateBadge={updateBadge}
       />
