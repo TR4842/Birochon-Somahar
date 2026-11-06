@@ -1,7 +1,7 @@
 import React from 'react';
 import { BarChart3, BookOpenText, Zap, Star, Info } from 'lucide-react';
 
-export default function Navbar({ activeTab, setActiveTab, bookmarkCount = 0 }) {
+export default function Navbar({ activeTab, setActiveTab, bookmarkCount = 0, updateBadge = null }) {
   const navItems = [
     {
       id: 'stats',
@@ -36,7 +36,7 @@ export default function Navbar({ activeTab, setActiveTab, bookmarkCount = 0 }) {
       label: 'পরিচিতি',
       sublabel: 'নির্মাতা',
       icon: Info,
-      badge: null
+      badge: updateBadge
     }
   ];
 
@@ -62,7 +62,9 @@ export default function Navbar({ activeTab, setActiveTab, bookmarkCount = 0 }) {
                   <span className={`absolute -top-2 -right-3 text-[10px] font-bold px-1.5 py-0.2 rounded-full ${
                     item.id === 'quiz'
                       ? 'bg-retrorose text-white animate-pulse'
-                      : 'bg-peach-400 text-white'
+                      : item.id === 'about'
+                        ? 'bg-mint-400 text-white'
+                        : 'bg-peach-400 text-white'
                   }`}>
                     {item.badge}
                   </span>

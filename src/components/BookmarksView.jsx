@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Star, BookOpen, Search, X } from 'lucide-react';
-import ItemCard from './ItemCard';
+import ItemCard from './ItemCard.jsx';
 
 export default function BookmarksView({ databaseData, bookmarks, onToggleBookmark, onPracticeItem }) {
   const [searchQuery, setSearchQuery] = useState('');

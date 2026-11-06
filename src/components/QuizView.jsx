@@ -18,12 +18,12 @@ import {
   Filter
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { generateQuiz } from '../utils/quizGenerator';
+import { generateQuiz } from '../utils/quizGenerator.js';
 import {
   loadWrongAnswers,
   addWrongAnswers,
   removeWrongAnswer
-} from '../utils/storage';
+} from '../utils/storage.js';
 
 // ---------------------------------------------------------------------------
 // Letter-filter alphabets used by the quiz setup screen.

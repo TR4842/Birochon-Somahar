@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Keep the WebView localStorage (stats, bookmarks, wrong answers and reading
+  progress) in Android Auto Backup, so even a reinstall after a signing-key
+  change can restore the user's data.
+-->
+<full-backup-content>
+    <include domain="root" path="app_webview" />
+    <include domain="database" path="." />
+    <include domain="sharedpref" path="." />
+    <include domain="file" path="." />
+</full-backup-content>

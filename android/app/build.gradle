@@ -1,14 +1,58 @@
 apply plugin: 'com.android.application'
 
+// ---------------------------------------------------------------------------
+// ONE source of truth for the version: ../../version.json
+// (also read by npm/vite and by the GitHub Actions release workflow)
+// ---------------------------------------------------------------------------
+def appVersionInfo = new groovy.json.JsonSlurper().parse(file('../../version.json'))
+
+// ---------------------------------------------------------------------------
+// STABLE SIGNING KEY
+// An Android update can only be installed on top of the previous build when
+// both APKs carry the SAME certificate. Supply a keystore (locally as
+// android/app/birochon-release.jks, or in CI via ANDROID_KEYSTORE_BASE64) and
+// BOTH debug and release builds are signed with it. Without a keystore the
+// build falls back to the auto-generated debug key (fine for local dev only).
+//
+// Local setup:
+//   keytool -genkeypair -v -keystore android/app/birochon-release.jks \
+//     -alias birochon -keyalg RSA -keysize 2048 -validity 10000
+//   export ANDROID_KEYSTORE_PASSWORD=... ANDROID_KEY_ALIAS=birochon ANDROID_KEY_PASSWORD=...
+// To keep the EXACT v1.0 signature, point these variables at the original
+// debug.keystore used to sign that APK instead of creating a new key.
+// ---------------------------------------------------------------------------
+def releaseKeystoreFile = System.getenv('ANDROID_KEYSTORE_FILE')
+        ? file(System.getenv('ANDROID_KEYSTORE_FILE'))
+        : file('birochon-release.jks')
+def hasStableKeystore = releaseKeystoreFile.exists()
+def storePasswordValue = System.getenv('ANDROID_KEYSTORE_PASSWORD') ?: 'android'
+def keyAliasValue = System.getenv('ANDROID_KEY_ALIAS') ?: 'androiddebugkey'
+def keyPasswordValue = System.getenv('ANDROID_KEY_PASSWORD') ?: storePasswordValue
+
 android {
     namespace "com.tr4842.birochonsomahar"
     compileSdk rootProject.ext.compileSdkVersion
+
+    // Only create a signing config when a keystore actually exists: this keeps
+    // local builds (no key) working with the standard auto-generated debug key.
+    if (hasStableKeystore) {
+        signingConfigs {
+            stable {
+                storeFile releaseKeystoreFile
+                storePassword storePasswordValue
+                keyAlias keyAliasValue
+                keyPassword keyPasswordValue
+                // AGP enables v1 (needed for minSdk 22) + v2/v3 by default.
+            }
+        }
+    }
+
     defaultConfig {
-        applicationId "com.tr4842.birochonsomahar"
+        applicationId appVersionInfo['package']
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode(appVersionInfo.versionCode as int)
+        versionName(appVersionInfo.version)
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -17,7 +61,13 @@ android {
         }
     }
     buildTypes {
+        debug {
+            // The distributed APK is a debug build, so it MUST use the stable
+            // key too — otherwise the next release cannot be installed over it.
+            if (hasStableKeystore) signingConfig signingConfigs.stable
+        }
         release {
+            if (hasStableKeystore) signingConfig signingConfigs.stable
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }

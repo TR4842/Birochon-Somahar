@@ -1,7 +1,10 @@
 import React from 'react';
 import { User, GraduationCap, BookOpen, Send, Sparkles, Heart, ExternalLink } from 'lucide-react';
+import UpdateCard from './UpdateCard.jsx';
+import BackupCard from './BackupCard.jsx';
+import { APP_VERSION, formatBnNumber } from '../utils/appVersion.js';
 
-export default function AboutView() {
+export default function AboutView({ updateInfo, onUpdateChecked }) {
   // Try .png first (your real photo), then .svg (built-in placeholder), then initials.
   // To use your own photo, drop it at: public/profile.png  (any reasonable size)
   const profileImg = '/profile.png';
@@ -124,6 +127,12 @@ export default function AboutView() {
         </a>
       </div>
 
+      {/* GitHub Release update option (opt-in, offline-first) */}
+      <UpdateCard updateInfo={updateInfo} onUpdateChecked={onUpdateChecked} />
+
+      {/* One-time data migration helper for the signing-key switch */}
+      <BackupCard />
+
       {/* Footer / Credits */}
       <div className="bg-cream-100 p-4 rounded-2xl border border-peach-200 shadow-retro text-center space-y-1">
         <div className="flex items-center justify-center gap-1.5 text-xs text-warmcharcoal-200">
@@ -133,6 +142,9 @@ export default function AboutView() {
         </div>
         <div className="text-[11px] text-warmcharcoal-100">
           © {formatBnNumber(new Date().getFullYear())} বিরচন সমাহার — সকল অধিকার সংরক্ষিত
+        </div>
+        <div className="text-[11px] text-warmcharcoal-100 font-bold">
+          সংস্করণ v{formatBnNumber(APP_VERSION)}
         </div>
       </div>
 

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { 
+import ReadingProgressCard from './ReadingProgressCard.jsx';
+import {
   CheckCircle2, 
   XCircle, 
   Target, 
@@ -18,7 +19,15 @@ import {
   Sparkles
 } from 'lucide-react';
 
-export default function StatsLanding({ stats, onStartQuiz, onResetStats, databaseInfo, setActiveTab }) {
+export default function StatsLanding({
+  stats,
+  onStartQuiz,
+  onResetStats,
+  databaseInfo,
+  setActiveTab,
+  readingProgress,
+  onResumeReading
+}) {
   const [expandedHistoryId, setExpandedHistoryId] = useState(null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
 
@@ -69,6 +78,13 @@ export default function StatsLanding({ stats, onStartQuiz, onResetStats, databas
           </button>
         </div>
       </div>
+
+      {/* Resume reading — per-category, right where the user left off */}
+      <ReadingProgressCard
+        databaseData={databaseInfo}
+        readingProgress={readingProgress}
+        onResumeReading={onResumeReading}
+      />
 
       {/* Primary KPI Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
